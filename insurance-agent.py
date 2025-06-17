@@ -1,7 +1,6 @@
 from pinecone import Pinecone
 from openai import OpenAI
 from pydantic import BaseModel
-from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
