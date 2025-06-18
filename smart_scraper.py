@@ -120,13 +120,12 @@ def scrape_and_store_if_not_exists(urls_to_scrape: list[str]) -> list[dict]:
                 res.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
                 html_content = res.text
                 
-                # Store the fetched content
                 filepath.write_text(html_content, encoding='utf-8')
                 print(f"STORED: Saved content for {url} to {filepath}")
                 processed_data.append({"url": url, "html": html_content})
             except requests.exceptions.RequestException as e:
                 print(f"FETCH FAILED for {url}: {e}")
-            except Exception as e: # Catch any other unexpected errors during fetch/store
+            except Exception as e: 
                 print(f"An unexpected error occurred while fetching/storing {url}: {e}")
                 
     print(f"Finished scraping/loading. Total documents for processing: {len(processed_data)}")
@@ -135,8 +134,7 @@ def scrape_and_store_if_not_exists(urls_to_scrape: list[str]) -> list[dict]:
 
 
 # ------- LLM IN THE LOOP ---------- # 
-# TODO introduce LLM in the loop to decide on what to clean 
- 
+# introduce LLM in the loop to decide on what to clean 
 
 def sample_html_files(sample_size=3):
     """Returns a random sample of HTML files from the cache directory."""
@@ -323,8 +321,7 @@ def chunk_and_upload_data(data_to_process: list[dict], pinecone_api_key: str, pi
     
     print("UPLOADING TO PINECONE...")
     try:
-        # Using the batch upsert function that adapts your specific `index.upsert_records` call
-        batch_upsert_to_pinecone(index, records_for_pinecone, namespace="ns2") # Your namespace
+        batch_upsert_to_pinecone(index, records_for_pinecone, namespace="ns2")
     except Exception as e:
         print(f"ERROR: Failed during batch upsert to Pinecone: {e}")
         print("Please check the `batch_upsert_to_pinecone` function and the `index.upsert_records` call's compatibility with your Pinecone setup.")

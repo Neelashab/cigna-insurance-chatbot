@@ -8,12 +8,12 @@ import os
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX_HOST = os.getenv("PINECONE_INDEX_HOST")
+PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
 NAMESPACE = os.getenv("NAMESPACE")
 
 # Create client 
 pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(host=PINECONE_INDEX_HOST)
+index = pc.Index(host=PINECONE_INDEX_NAME)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Initialize the session state
@@ -30,11 +30,11 @@ class SessionState:
         self.last_bot_response = ""
 
 class SmartQueries(BaseModel):
+    clarify: bool
     queryDB: bool
     queries: list[str]
-
+    
 class ChatResponse(BaseModel):
-    follow_up: bool
     response: str
 
 def rewrite_query(user_query, client, currentSession: SessionState):
@@ -43,7 +43,9 @@ def rewrite_query(user_query, client, currentSession: SessionState):
     Instructions: Analyze the user's message to identify their main intent and specific information needs regarding health insurance (such as coverage, costs, enrollment, eligibility, providers, plan types, etc.).
     First, decide if it is true that the user prompt neccesitates a database query. 
     If false, return an empty list of queries. 
-    If true, break down the user's request into distinct, actionable search queries that can be used to retrieve relevant information from a vector database.
+    Then, determine whether the user query has vague terms or intent. For example, terms such as "my state" or "injury" may not be specific enough to create the most accurate query. 
+    If true, also return an empty list of queries. 
+    If a query is required and there is no need for a clarification, break down the user's request into distinct, actionable search queries that can be used to retrieve relevant information from a vector database.
     Consider the full conversation history for relevant information when generating queries, not just the last message.
     If two semantically different concepts are present in the user's message, create both separate queries for each concept and a combined query. 
     Output only the most relevant search queries as comma separated strings (e.g., 'health insurance coverage options', 'enrollment process for health insurance in Texas').
@@ -55,6 +57,7 @@ def rewrite_query(user_query, client, currentSession: SessionState):
     {currentSession.last_bot_response}
     Respond in the following format:
     queryDB: true or false
+    clarify: true or false
     queries: ["comma-separated list of search queries"]
     """
     print("")
@@ -63,19 +66,18 @@ def rewrite_query(user_query, client, currentSession: SessionState):
         input=[{"role": "developer", "content": prompt}],
         user=currentSession.session_id,
         text_format=SmartQueries)
-        #previous_response_id=currentSession.last_response_id)
     
     parsed = raw_response.output_parsed
     print("QUERY? YES OR NO: ", parsed.queryDB)
+    print("CLARIFICATION QUESTION NEEDED? YES OR NO: ", parsed.clarify)
     print("QUERY SUGGESTIONS: ", parsed.queries)
 
     if not parsed.queryDB:
         print("No queries needed, returning empty list.")
-    return parsed.queries if parsed.queryDB else []
+    return parsed
 
 
-# cache certain queries in the session state, if the same one comes up just reuse that? 
-# is this even going to be useful realistically? 
+# TODO implement semantic caching
 def query_db(queries: list[str], top_k: int = 5):
     context = ""
     for query in queries:
@@ -99,26 +101,27 @@ def query_db(queries: list[str], top_k: int = 5):
     return context
 
 def ask_rag_bot(user_query: str,  currentSession: SessionState, top_k: int = 5):
-
-    global last_response_id
     context = ""
     
-    queries = rewrite_query(user_query, client, currentSession)
+    query_analysis = rewrite_query(user_query, client, currentSession)
+    queries = query_analysis.queries
 
     if queries: 
         context += query_db(queries, top_k)
 
     # Prompt GPT for a response, injecting relevant context
     prompt = f"""You are a helpful assistant for existing Cigna customers or prospective new customers looking to buy insurance.
-                First, decide if a follow up question is needed to clarify the user's intent, or if you can provide a direct answer based on the context provided.
-                If a follow up question is needed, respond with a follow up question that will help you better understand the user's needs.
+                First, determine whether it is necessary to clarify any vague terms or intent in the user's request. 
+                For example, if a user asks about "my state" or "injury", you may need to ask a clarifying question.
+                Clarification required: {query_analysis.clarify}
+                
+                If true, respond with a clarifying question that will help you better understand the user's needs.
                 If not, provide a direct answer based on relevant context, if provided.
                 Context:
                 {context}
 
                 Question: {user_query}
                 Respond in the following format:
-                    follow_up: true or false
                     response: 'response or follow up question'"""
 
     raw_response = client.responses.parse(
@@ -130,8 +133,6 @@ def ask_rag_bot(user_query: str,  currentSession: SessionState, top_k: int = 5):
 
     currentSession.last_response_id = raw_response.id
     parsed = raw_response.output_parsed
-
-    print("A FOLLOW UP REQUIRED? ", parsed.follow_up)
 
     return parsed.response
 
@@ -149,3 +150,5 @@ if __name__ == "__main__":
         currentSession.last_bot_response = answer
 
         print("\nAssistant:", answer)
+
+
