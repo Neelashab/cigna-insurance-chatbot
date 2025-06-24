@@ -17,20 +17,13 @@ import os
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+PINECONE_INDEX_HOST = os.getenv("PINECONE_INDEX_HOST")
 NAMESPACE = os.getenv("NAMESPACE")
-HTML_CACHE_DIR = os.getenv("HTML_CACHE_DIR")
+HTML_CACHE_DIR = Path(os.getenv("HTML_CACHE_DIR"))
 
 # SETUP 
 client = OpenAI(api_key=OPENAI_API_KEY)
 SESSION_ID = "development_id"  # For development, use a fixed session ID. In production, generate a new one each time.
-
-
-class HTMLTags(BaseModel):
-    tags_to_parse: list[str]
-    blocked_classes: list[str]
-    blocked_headings: list[str]
-    include_headers: bool 
 
 
 # SCRAPING NOTES:
@@ -132,85 +125,37 @@ def scrape_and_store_if_not_exists(urls_to_scrape: list[str]) -> list[dict]:
     return processed_data
 
 
-
-# ------- LLM IN THE LOOP ---------- # 
-# introduce LLM in the loop to decide on what to clean 
-
 def sample_html_files(sample_size=3):
     """Returns a random sample of HTML files from the cache directory."""
     files = list(HTML_CACHE_DIR.glob("*.html"))
     return random.sample(files, min(sample_size, len(files)))
 
-
-def smart_parse():
-    """Give LLM a chance to parse HTML files and output tags to either ignore or parse"""
-
-    paths = sample_html_files()
-    raw_html = [path.read_text() for path in paths]
-    clipped_html = "\n\n".join(html[:3000] for html in raw_html)
-
-    prompt = f"""
-You are a helpful assistant improving a web scraping pipeline for a health insurance website.
-
-Your job is to analyze the raw HTML below and output a set of scraping rules.
-
-Instructions:
-- Identify and list the tags (including custom tags like <leaf-card>) that contain meaningful content.
-- Identify any tags/classes/headings that should be ignored (like footers, navs, disclaimers, careers, etc.).
-- Indicate whether structural headers (like h2, h3) should be captured to preserve context.
-- If in doubt about a tag, include it in the output.
-
-Output MUST be valid JSON using this structure:
-{{
-  "tags_to_parse": ["div", "leaf-card", "leaf-list"],
-  "blocked_classes": ["legal-links", "footer", "nav-bar"],
-  "blocked_headings": ["privacy", "careers", "sitemap"],
-  "include_headers": true
-}}
-
-HTML TO ANALYZE:{clipped_html}"""
-
-    response = client.responses.parse(
-        model="gpt-4.1",
-        input=[{"role": "developer", "content": prompt}],
-        text_format=HTMLTags,
-        user=SESSION_ID)
-
-    return response.output_parsed
-
-
-# ------- LLM IN THE LOOP ---------- # 
-
-
-
-
-def clean_doc_content(html: str, tags:HTMLTags) -> str:
-    """Parse raw HTML and clean content by disposing of blocked headers and slots"""
+def parse_page(html: str) -> str:
     soup = bs4.BeautifulSoup(html, "html.parser")
-    extracted = []
+    # Tags and slot values you want to remove
 
-    for tag in soup.find_all(tags.tags_to_parse):
-        if tag.name == "div" and tags.blocked_classes:
-            if any(cls in tag.get("class", []) for cls in tags.blocked_classes):
-                continue
-        
-        heading_text = ""
-        if tags.include_headers:
-            for header_tag in ["h1", "h2", "h3", "h4", "h5", "h6"]:
-                heading = tag.find(header_tag)
-                if heading:
-                    heading_text = heading.get_text(strip=True).lower()
-                    break
 
-        if any(block in heading_text for block in tags.blocked_headings):
-            continue
+    SLOT_TAGS_TO_DECOMPOSE = {
+    "div": {"slot": ["disclaimer", "copyright", "primary-nav-search", "primary-nav-search-input-label", "primary-nav-language"]},
+    "leaf-list": {"slot": ["legal-links", "main-links"]}}
 
-        text = tag.get_text(separator=" ", strip=True)
-        if len(text) > 30:
-            extracted.append(text)
+    for tag_name, attrs in SLOT_TAGS_TO_DECOMPOSE.items():
+        for slot_val in attrs.get("slot", []):
+            for tag in soup.find_all(tag_name, attrs={"slot": slot_val}):
+                tag.decompose()
 
-    return "\n\n".join(extracted)
+    for li in soup.find_all("li"):
+        li.decompose()
 
+    for tag in soup.find_all("chc-skiplink"):
+        tag.decompose()
+    
+    for tag in soup.find_all(attrs={"slot": "heading"}):
+        tag.decompose() 
+
+    extracted = soup.get_text(separator='\n', strip=True)
+
+    return extracted
 
 def batch_upsert_to_pinecone(index, records, namespace="ns2", batch_size=96):
     """Upserts records to Pinecone in batches."""
@@ -219,10 +164,9 @@ def batch_upsert_to_pinecone(index, records, namespace="ns2", batch_size=96):
         print(f"Upserting batch of {len(batch)} records to namespace '{namespace}'...")
         index.upsert_records(namespace, batch) 
 
-def chunk_and_upload_data(data_to_process: list[dict], pinecone_api_key: str, pinecone_index_name: str, tags: HTMLTags):
+def clean_data(data_to_process: list[dict]):
     """
-    Cleans, chunks, and uploads the provided data (list of dicts with 'url' and 'html')
-    to the specified Pinecone index.
+    Cleans and chunks the provided data (list of dicts with 'url' and 'html')
     """
     if not data_to_process:
         print("No data provided to chunk and upload. Skipping.")
@@ -231,7 +175,7 @@ def chunk_and_upload_data(data_to_process: list[dict], pinecone_api_key: str, pi
     print("CLEANING DOCUMENT CONTENT...")
     cleaned_docs_for_langchain = []
     for item in data_to_process:
-        text_content = clean_doc_content(item["html"], tags) 
+        text_content = parse_page(item["html"]) 
         if text_content:
             cleaned_docs_for_langchain.append(
                 Document(
@@ -247,6 +191,10 @@ def chunk_and_upload_data(data_to_process: list[dict], pinecone_api_key: str, pi
     print(f"Cleaned {len(cleaned_docs_for_langchain)} documents.")
     if cleaned_docs_for_langchain:
         print(f"📄 Example cleaned content (first document, first 300 chars):\n{cleaned_docs_for_langchain[0].page_content[:300]}...\n")
+    
+    return cleaned_docs_for_langchain
+
+def chunk_data(cleaned_docs_for_langchain: list[Document]) -> list[Document]:
 
     print("SPLITTING INTO CHUNKS...")
 
@@ -260,50 +208,28 @@ def chunk_and_upload_data(data_to_process: list[dict], pinecone_api_key: str, pi
     if not document_chunks:
         print("No chunks created. Skipping upload to Pinecone.")
         return
+    
+    return document_chunks
 
+def upload_data(document_chunks: list[Document], pinecone_api_key: str, pinecone_index_host: str):
+    
     print("SETTING UP PINECONE...")
+
+    # create pinecone client
     try:
         pc = Pinecone(api_key=pinecone_api_key)
     except Exception as e:
         print(f"ERROR: Failed to initialize Pinecone client: {e}")
         return
 
-    # Pinecone index handling
-    # TODO look into using pc.create_index instead?
     try:
-        existing_indexes = pc.list_indexes().names()
+        index = pc.Index(host=PINECONE_INDEX_HOST)
+        print(f"Successfully connected to index")
     except Exception as e:
-        print(f"ERROR: Failed to list Pinecone indexes: {e}. Please check API key and connection.")
+        print(f"ERROR: Failed to connect to Pinecone index: {e}")
         return
 
-    if pinecone_index_name not in existing_indexes:
-        print(f"Index '{pinecone_index_name}' not found. Attempting to create it using provided configuration...")
-        try:
-            pc.create_index_for_model(
-                name=pinecone_index_name,
-                cloud="aws",
-                region="us-east-1", 
-                embed={ # specify model to use for embedding & tell it to embed chunk text field
-                    "model": "llama-text-embed-v2",
-                    "field_map": {"text": "chunk_text"}
-                }
-            )
-            print(f"Index '{pinecone_index_name}' creation request sent. It may take some time to become ready.")
-            # TODO consider adding polling mechanism to wait for index to be ready
-        except Exception as e:
-            print(f"ERROR: Failed to create Pinecone index '{pinecone_index_name}': {e}")
-            print("Please ensure the index is created manually or check the creation parameters and your Pinecone client version/setup.")
-            return 
-    else:
-        print(f"Index '{pinecone_index_name}' already exists.")
-
-    try:
-        index = pc.Index(pinecone_index_name)
-        print(f"Successfully connected to index '{pinecone_index_name}'.")
-    except Exception as e:
-        print(f"ERROR: Failed to connect to Pinecone index '{pinecone_index_name}': {e}")
-        return
-
+    # prepare records for upsert
     print("PREPARING RECORDS FOR PINECONE...")
     records_for_pinecone = []
     for i, chunk_doc in enumerate(document_chunks):
@@ -342,15 +268,14 @@ if __name__ == "__main__":
     print("\n=== PART 1: SCRAPING AND STORING DATA ===")
     retrieved_html_data = scrape_and_store_if_not_exists(URLS)
 
-    if not retrieved_html_data:
-        print("No data was retrieved or loaded. Exiting script.")
-        
-    else:
-        print("\n=== PART 2: SMART PARSING HTML CONTENT ===")
-        tags = smart_parse()
-        print("SMART PARSE OUTPUT: ", tags)
-        print("\n=== PART 3: CHUNKING AND UPLOADING TO DATABASE ===")
-        chunk_and_upload_data(retrieved_html_data, PINECONE_API_KEY, PINECONE_INDEX_NAME, tags)
+    print("\n=== PART 2: PARSE AND CLEAN HTML CONTENT ===")
+    clean_data = clean_data(retrieved_html_data)
+
+    print("\n=== PART 3: SMARTLY CHUNK CLEANED CONTENT ===")
+    document_chunks = chunk_data(clean_data)
+
+    print("\n=== PART 4: UPLOAD TO DATABASE ===")
+    #upload_data(document_chunks, PINECONE_API_KEY, PINECONE_INDEX_HOST)
 
     print("\n--- Cigna Data Processing Script Finished ---")
 

@@ -108,6 +108,8 @@ def ask_rag_bot(user_query: str,  currentSession: SessionState, top_k: int = 5):
 
     if queries: 
         context += query_db(queries, top_k)
+    
+    print("Context retrieved from database: ", context)
 
     # Prompt GPT for a response, injecting relevant context
     prompt = f"""You are a helpful assistant for existing Cigna customers or prospective new customers looking to buy insurance.
