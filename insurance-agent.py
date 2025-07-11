@@ -2,21 +2,39 @@ from pinecone import Pinecone
 from openai import OpenAI
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from typing import Literal 
+from datetime import date
+import re
 import os
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-PINECONE_INDEX_NAME = os.getenv("PINECONE_INDEX_NAME")
+PINECONE_INDEX_HOST = os.getenv("PINECONE_INDEX_HOST")
 NAMESPACE = os.getenv("NAMESPACE")
 
 # Create client 
 pc = Pinecone(api_key=PINECONE_API_KEY)
-index = pc.Index(host=PINECONE_INDEX_NAME)
+index = pc.Index(host=PINECONE_INDEX_HOST)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Initialize the session state
+
+class BusinessProfile(BaseModel):
+    business_name: str
+    business_size: Literal["2–99", "100–499", "500–2,999", "3,000+"]
+    business_type: Literal[
+        "Hospital and Health Systems", "Higher Education", "K-12 Education",
+        "State and Local Governments", "Taft-Hartley and Federal",
+        "Third Party Administrators (Payer Solutions)"
+    ]
+    state: str
+    creation_date: date
+    other: list[str]
+    response: str
+    complete: bool
+
 class SessionState:
     def __init__(self):
         self.last_response_id = None
@@ -28,6 +46,7 @@ class SessionState:
         # or entity recognition on the chat history 
         self.all_input = ""
         self.last_bot_response = ""
+        self.business_profile: BusinessProfile | None = None
 
 class SmartQueries(BaseModel):
     clarify: bool
@@ -76,8 +95,6 @@ def rewrite_query(user_query, client, currentSession: SessionState):
         print("No queries needed, returning empty list.")
     return parsed
 
-
-# TODO implement semantic caching
 def query_db(queries: list[str], top_k: int = 5):
     context = ""
     for query in queries:
@@ -138,19 +155,79 @@ def ask_rag_bot(user_query: str,  currentSession: SessionState, top_k: int = 5):
 
     return parsed.response
 
+def get_business_info_node(user_query: str, currentSession: SessionState):
+    prompt = f"""
+    You are a helpful insurance assistant that helps business owners find group health insurance options. 
+
+    Your goal is to collect the following information in a polite and friendly way. It is your job to classify the user provided information 
+    into specific categories, the user should not be aware of all of the specific collection categories.  
+
+    1. Business Name
+    2. Business Size (Number of full-time or full-time equivalent employees)
+    3. Business Type
+    4. State where the business is registered
+    5. Date the business was created
+    6. Any other relevant information the user decides to share
+
+    Ask only one question at a time. Be conversational, but clear and efficient.
+
+    If a user responds vaguely or incompletely, politely ask follow-up questions until all fields are collected. 
+
+    Do not deduce the business type, always ask for it directly or confirm a deduction if you did not ask the user explicitly. 
+
+    If the user provides additional information that does not fit into the above categories, collect it under "other" and ask if there is any other information they would like to share.
+    
+    Once all required info is gathered, mark "complete" as true. 
+
+    In your response, acknowledge you have all required information and say you will now begin exploring plan options.
+
+    user query: {user_query}
+    """
+
+    raw_response = client.responses.parse(
+        model="gpt-4.1",
+        input=[{"role": "developer", "content": prompt}],
+        user=currentSession.session_id,
+        previous_response_id=(currentSession.last_response_id),
+        text_format=BusinessProfile)
+
+    currentSession.last_response_id = raw_response.id
+    parsed = raw_response.output_parsed
+
+    if parsed.complete: 
+        currentSession.business_profile = parsed
+        print("Business profile collection complete.")
+        print("Parsed business profile: \n", parsed)
+
+    return parsed.complete, parsed.response
+
+
+def plan_discovery_node(user_query: str, currentSession: SessionState):
+    
+    return 
+
+
 # Chat loop
 if __name__ == "__main__":
     currentSession = SessionState()
-    print("Hello, welcome to Cigna Health Insurance! How can I help you?")
+
+    # Conversational Loop 
+
+    print("Hello, welcome to Cigna Health Insurance! I am a helpful bot designed to help your company buy health insurance.")
+    print("To begin, could you please tell me a bit about your business?")
+
     while True:
         query = input("\nYou: ")
         if query.lower() in ["exit", "quit"]:
             break
-
         currentSession.all_input += query + "\n"
-        answer = ask_rag_bot(query, currentSession)
-        currentSession.last_bot_response = answer
 
-        print("\nAssistant:", answer)
+        done = False
+
+        while not done:
+            done, response = get_business_info_node(query, currentSession)
+            currentSession.last_bot_response = response
+
+        print("\nAssistant:", response)
 
 

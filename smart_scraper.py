@@ -71,6 +71,7 @@ URLS = ["https://www.cigna.com/individuals-families/shop-plans/health-insurance-
                "https://www.cigna.com/knowledge-center/dental-insurance-cost",
                "https://www.cigna.com/individuals-families/shop-plans/supplemental/"]
 
+TEST = ["https://www.cigna.com/individuals-families/shop-plans/plans-through-employer/open-access-plus"]
 
 # Scrape and store HTMl if it doesn't exist in local cache
 def url_to_filename(url: str) -> str:
@@ -266,10 +267,11 @@ if __name__ == "__main__":
     print("--- Starting Cigna Data Processing Script ---")
 
     print("\n=== PART 1: SCRAPING AND STORING DATA ===")
-    retrieved_html_data = scrape_and_store_if_not_exists(URLS)
+    retrieved_html_data = scrape_and_store_if_not_exists(TEST)
 
     print("\n=== PART 2: PARSE AND CLEAN HTML CONTENT ===")
     clean_data = clean_data(retrieved_html_data)
+    print(f"Cleaned data: \n", clean_data)
 
     print("\n=== PART 3: SMARTLY CHUNK CLEANED CONTENT ===")
     document_chunks = chunk_data(clean_data)
