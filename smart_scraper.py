@@ -1,15 +1,11 @@
-
 import bs4
-import random
 import requests
-import json
 from pathlib import Path
 import re
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pinecone import Pinecone
 from openai import OpenAI
-from pydantic import BaseModel
 from dotenv import load_dotenv
 import os
 
@@ -125,17 +121,10 @@ def scrape_and_store_if_not_exists(urls_to_scrape: list[str]) -> list[dict]:
     print(f"Finished scraping/loading. Total documents for processing: {len(processed_data)}")
     return processed_data
 
-
-def sample_html_files(sample_size=3):
-    """Returns a random sample of HTML files from the cache directory."""
-    files = list(HTML_CACHE_DIR.glob("*.html"))
-    return random.sample(files, min(sample_size, len(files)))
-
 def parse_page(html: str) -> str:
     soup = bs4.BeautifulSoup(html, "html.parser")
-    # Tags and slot values you want to remove
 
-
+    # manually determined. LLM could not do this reliably
     SLOT_TAGS_TO_DECOMPOSE = {
     "div": {"slot": ["disclaimer", "copyright", "primary-nav-search", "primary-nav-search-input-label", "primary-nav-language"]},
     "leaf-list": {"slot": ["legal-links", "main-links"]}}
@@ -212,7 +201,7 @@ def chunk_data(cleaned_docs_for_langchain: list[Document]) -> list[Document]:
     
     return document_chunks
 
-def upload_data(document_chunks: list[Document], pinecone_api_key: str, pinecone_index_host: str):
+def upload_data(document_chunks: list[Document], pinecone_api_key: str, pinecone_index_host: str, namespace: str = "ns2"):
     
     print("SETTING UP PINECONE...")
 
@@ -234,10 +223,16 @@ def upload_data(document_chunks: list[Document], pinecone_api_key: str, pinecone
     print("PREPARING RECORDS FOR PINECONE...")
     records_for_pinecone = []
     for i, chunk_doc in enumerate(document_chunks):
+        pinecone_metadata = chunk_doc.metadata
+
+        for key, value in pinecone_metadata.items():
+            if not isinstance(value, (str, int, float, bool, list)):
+                pinecone_metadata[key] = str(value) # Convert to string
+
         records_for_pinecone.append({
-            "_id": f"doc-{i}",
-            "chunk_text": chunk_doc.page_content, # field to embed
-            "source": chunk_doc.metadata.get("source", "unknown"),
+            "id": f"doc-{i}",
+            "chunk_text": chunk_doc.page_content,
+            **pinecone_metadata
         })
 
     if not records_for_pinecone:
@@ -248,7 +243,7 @@ def upload_data(document_chunks: list[Document], pinecone_api_key: str, pinecone
     
     print("UPLOADING TO PINECONE...")
     try:
-        batch_upsert_to_pinecone(index, records_for_pinecone, namespace="ns2")
+        batch_upsert_to_pinecone(index, records_for_pinecone, namespace)
     except Exception as e:
         print(f"ERROR: Failed during batch upsert to Pinecone: {e}")
         print("Please check the `batch_upsert_to_pinecone` function and the `index.upsert_records` call's compatibility with your Pinecone setup.")
@@ -280,4 +275,5 @@ if __name__ == "__main__":
     #upload_data(document_chunks, PINECONE_API_KEY, PINECONE_INDEX_HOST)
 
     print("\n--- Cigna Data Processing Script Finished ---")
+
 
