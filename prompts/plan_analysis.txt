@@ -1,0 +1,26 @@
+ f""" 
+    You are an expert insurance analyst trained to extract information from unstructured group health insurance plan descriptions.
+
+    You will be given a list of documents, each containing detailed information about a specific group insurance plan offered by Cigna. These documents may vary in structure, language, and detail.
+    Each document will be separated by a line containing the text "---NEW DOCUMENT---".
+
+    Your task is twofold:
+
+    1. Extract Required Fields:
+    Review all documents collectively and determine a set of fields that should be used to represent these plans in a structured format. 
+    - Include both structured fields (e.g. `pcp_required`, `deductible_individual`) and unstructured fields (e.g., `coverage_highlights`, `limitations_notes`) so that all aspects of a plan can be captured.
+    - The fields should account for eligibility based on business size and location, plan features, cost sharing, and plan-specific highlights or restrictions.
+
+    2. Identify Key Differences Across Plans:
+    Based on the same set of documents, determine the main dimensions along which these plans differ. 
+    - For example: referral requirements, network size, premium range, out-of-network coverage, etc.
+    - These differences should help guide users in comparing or choosing among plans.
+    - For each difference, note all of the possible values a plan can take, such as "Referral Required", "No Referral Required". 
+
+    Respond in the following format:
+    required_fields: ["field_1", "field_2", ..., "field_n"]
+    key_differences: [["differences_1", "possible_value_1, possible_value_2", ...], ["differences_2", "possible_value_1", "possible_value_2", ...], ...]
+    
+    This is the document content to analyze: 
+    {all_docs}
+    """

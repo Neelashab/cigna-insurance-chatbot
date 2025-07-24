@@ -45,6 +45,7 @@
     "rate_sheet_links",
     "enrollment_process"
   ],
+
   "key_differences": [
     [
       "Plan Type",
@@ -102,77 +103,36 @@
       "Minimum Premium"
     ],
     [
-      "Plan Customizability",
-      "Standard Design",
-      "Customizable"
-    ],
-    [
-      "Deductible Range",
-      "Lower (LocalPlus typical)",
-      "Broader range (PPO/OAP typical)",
-      "Customizable"
-    ],
-    [
-      "Copay/Coinsurance Structure",
-      "Customizable",
-      "Predefined"
-    ],
-    [
       "Network Size",
       "Large National",
       "Smaller Local",
-      "Limited/Focussed",
+      "Limited/Focused",
       "None (Indemnity)"
-    ],
-    [
-      "Virtual Care Features",
-      "$0 virtual urgent care",
-      "24/7/365 virtual access",
-      "Not specified"
     ],
     [
       "Business Size Eligibility",
       "2-50 employees (Small Group)",
-      "51+ employees",
+      "2-99 employees",
+      "100-499 employees",
+      "500-2,999 employees",
       "Enterprise (3,000+)",
       "All sizes"
     ],
     [
-      "Availability by Location",
-      "National",
-      "State-specific",
-      "Select service areas only"
-    ],
-    [
-      "Prescription Drug Coverage",
-      "Included with plan",
-      "Separate prescription list",
-      "Not included"
-    ],
-    [
       "Self-funded Option Available",
       "Yes",
-      "No",
-      "Varies by plan"
+      "No"
     ],
     [
       "HSA/HRA/FSA Option",
       "Available",
-      "Not available",
-      "Varies by plan"
+      "Not available"
     ],
     [
       "Provider Network Access",
       "In-network only",
       "In- and out-of-network",
       "Any provider (Indemnity)"
-    ],
-    [
-      "Main Value Proposition",
-      "Lower cost (LocalPlus, SureFit)",
-      "Maximum flexibility (OAP, PPO, Indemnity)",
-      "Coordination of care (HMO, Medical Network)",
-      "Customizability (SureFit)"
     ]
   ]
 }

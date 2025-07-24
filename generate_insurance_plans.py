@@ -47,6 +47,16 @@ plan_links = [
     # ^ INCLUDE PDF FOR SG
 ]
 
+state = Literal["All states",
+        "AL", "AK", "AZ", "AR", "CA", "CO", 
+        "CT", "DE", "FL", "GA", "HI", "ID", 
+        "IL", "IN", "IA", "KS", "KY", "LA", 
+        "ME", "MD", "MA", "MI", "MN", "MS", 
+        "MO", "MT", "NE", "NV", "NH", "NJ", 
+        "NM", "NY", "NC", "ND", "OH", "OK", 
+        "OR", "PA", "RI", "SC", "SD", "TN", 
+        "TX", "UT", "VT", "VA", "WA", "WV", 
+        "WI", "WY", "DC"]
 
 class PlanAnalysis(BaseModel):
     required_fields: list[str]
@@ -68,6 +78,8 @@ def generate_pydantic_models(required_fields: list[str], key_differences: list[l
         tag_name = tag[0]
         literal_values = tuple(tag[1:])
         metadata[tag_name] = Literal[literal_values]
+
+    metadata["location_availability"] = list[state]
     
     DynamicMetadataTags = create_model("DynamicMetaDataTags", **metadata)
 
@@ -93,33 +105,8 @@ def plan_analysis(cleaned_plans: list[Document]) -> None:
 
     all_docs = aggregate_page_contents(cleaned_plans)
 
-    # Prompt GPT for a response, injecting relevant context
-    prompt = f""" 
-    You are an expert insurance analyst trained to extract information from unstructured group health insurance plan descriptions.
-
-    You will be given a list of documents, each containing detailed information about a specific group insurance plan offered by Cigna. These documents may vary in structure, language, and detail.
-    Each document will be separated by a line containing the text "---NEW DOCUMENT---".
-
-    Your task is twofold:
-
-    1. Extract Required Fields:
-    Review all documents collectively and determine a set of fields that should be used to represent these plans in a structured format. 
-    - Include both structured fields (e.g. `pcp_required`, `deductible_individual`) and unstructured fields (e.g., `coverage_highlights`, `limitations_notes`) so that all aspects of a plan can be captured.
-    - The fields should account for eligibility based on business size and location, plan features, cost sharing, and plan-specific highlights or restrictions.
-
-    2. Identify Key Differences Across Plans:
-    Based on the same set of documents, determine the main dimensions along which these plans differ. 
-    - For example: referral requirements, network size, premium range, out-of-network coverage, etc.
-    - These differences should help guide users in comparing or choosing among plans.
-    - For each difference, note all of the possible values a plan can take, such as "Referral Required", "No Referral Required". 
-
-    Respond in the following format:
-    required_fields: ["field_1", "field_2", ..., "field_n"]
-    key_differences: [["differences_1", "possible_value_1, possible_value_2", ...], ["differences_2", "possible_value_1", "possible_value_2", ...], ...]
-    
-    This is the document content to analyze: 
-    {all_docs}
-    """
+    with open("prompts/plan_analysis.txt") as f:
+        prompt = f.read()
 
     raw_response = client.responses.parse(
         model="gpt-4.1",
@@ -128,7 +115,6 @@ def plan_analysis(cleaned_plans: list[Document]) -> None:
         text_format=PlanAnalysis)
 
     parsed = raw_response.output_parsed
-
 
     model_input_data = {
     "required_fields": parsed.required_fields,
@@ -141,26 +127,11 @@ def plan_analysis(cleaned_plans: list[Document]) -> None:
 
 # Fit info into models
 def fit_info_into_models(cleaned_plans: list[Document], InsuranceModel: BaseModel, Metadata: BaseModel):
+    with open("prompts/insurance_model.txt") as f:
+        insurance_model_prompt = f.read()
 
-    insurance_model_prompt = f"""
-    You are an expert insurance analyst trained to extract information from unstructured group health insurance plan descriptions.
-    You will consider the given insurance plan information and thoroughly and accurately populate the following categories: 
-    {InsuranceModel.model_fields.items()}
-    Make sure that each field is comprehensive and contains all information that could be relevant to an employer who wants to buy a group insurance plan
-    and is weighing their options. 
-    Use concise and declarative language. 
-    If there is not adequate information to populate the field, leave it blank or use "N/A" as appropriate.
-    The plan information is as follows:
-    
-    """
-    metadata_prompt = f""" 
-    You are an expert insurance analyst trained to extract information from unstructured group health insurance plan descriptions.
-    You will consider the given insurance plan information and thoroughly and accurately populate the following categories: 
-    {Metadata.model_fields.items()}
-    These categories distinguish each insurance plan from one another and help employers compare plans.
-    Make sure that each field is comprehensive and contains all information that could be relevant to an employer weighing their options. 
-    The plan information is as follows:
-    """
+    with open("prompts/metadata.txt") as f:
+        insurance_model_prompt = f.read()
 
     insurance_plans = []
 
@@ -197,11 +168,8 @@ def fit_info_into_models(cleaned_plans: list[Document], InsuranceModel: BaseMode
         insurance_plans.append(Document(page_content=page_content, metadata=metadata))
         print("--- End of Plan ---\n")
 
-    print(insurance_plans)
     return insurance_plans
         
-
-
 
 
 if __name__ == "__main__":
