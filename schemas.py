@@ -1,6 +1,7 @@
 from enum import Enum
-from typing import Optional, List
+from typing import Optional, List, Literal
 from pydantic import BaseModel
+from datetime import date
 
 class PlanTypeEnum(str, Enum):
     oap_open_access_plus = "OAP (Open Access Plus)"
@@ -89,8 +90,16 @@ class ProviderNetworkAccessEnum(str, Enum):
     any_provider_indemnity = "Any provider (Indemnity)"
 
 
-class InsurancePreferenceModel(BaseModel):
-    plan_type: Optional[List[PlanTypeEnum]] = None
+class BusinessProfile(BaseModel):
+    business_name: str
+    business_size: Literal["2–99", "100–499", "500–2,999", "3,000+"]
+    business_type: Literal[
+        "Hospital and Health Systems", "Higher Education", "K-12 Education",
+        "State and Local Governments", "Taft-Hartley and Federal",
+        "Third Party Administrators (Payer Solutions)"
+    ]
+    business_state: str
+    creation_date: date
     network_type: Optional[List[NetworkTypeEnum]] = None
     pcp_requirement: Optional[List[PcpRequirementEnum]] = None
     auto_pcp_assignment: Optional[List[AutoPcpAssignmentEnum]] = None
@@ -104,7 +113,13 @@ class InsurancePreferenceModel(BaseModel):
     hsa_hra_fsa_option: Optional[List[HsaHraFsaOptionEnum]] = None
     provider_network_access: Optional[List[ProviderNetworkAccessEnum]] = None
 
+
+class PlanDiscoveryAnswers(BaseModel):
+    business_size: Optional[Literal["2-50", "51-99", "100-499", "500-2,999", "3,000+"]] = None
+    location: Optional[str] = None
+    coverage_preference: Optional[Literal["National", "Local"]] = None
+
 class PlanDiscoveryResponse(BaseModel):
-    insurance_preferences: InsurancePreferenceModel
+    plan_discovery_answers: PlanDiscoveryAnswers
     response: str
 

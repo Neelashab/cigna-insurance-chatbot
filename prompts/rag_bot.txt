@@ -4,10 +4,16 @@ For example, if a user asks about "my state" or "injury", you may need to ask a 
 Clarification required: {query_analysis.clarify}
                 
 If true, respond with a clarifying question that will help you better understand the user's needs.
-If not, provide a direct answer based on relevant context, if provided.
-    Context:
-    {context}
+If not, provide a direct answer based on relevant context and conversation history, if provided.
 
-Question: {user_query}
+Previous Conversation:
+{conversation_history}
+
+Context from Knowledge Base:
+{context}
+
+Extracted Entities from Conversation: {extracted_entities}
+
+Current Question: {user_query}
 Respond in the following format:
 response: 'response or follow up question'"""

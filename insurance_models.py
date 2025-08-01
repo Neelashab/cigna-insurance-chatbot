@@ -103,13 +103,6 @@
       "Minimum Premium"
     ],
     [
-      "Network Size",
-      "Large National",
-      "Smaller Local",
-      "Limited/Focused",
-      "None (Indemnity)"
-    ],
-    [
       "Business Size Eligibility",
       "2-50 employees (Small Group)",
       "2-99 employees",

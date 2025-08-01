@@ -10,11 +10,14 @@ f"""
     If two semantically different concepts are present in the user's message, create both separate queries for each concept and a combined query. 
     Output only the most relevant search queries as comma separated strings (e.g., 'health insurance coverage options', 'enrollment process for health insurance in Texas').
     Do not answer the user's question or include extra information; only provide the list of search queries.
-    User input: {user_query}
-    Take into account all past user queries for context: 
-    {currentSession.all_input}
-    Also take into account the last bot response for context:
-    {currentSession.last_bot_response}
+    
+    Current User Query: {user_query}
+    
+    Previous Conversation History:
+    {conversation_history}
+    
+    Extracted Entities from Conversation: {extracted_entities}
+    
     Respond in the following format:
     queryDB: true or false
     clarify: true or false
