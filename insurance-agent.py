@@ -1,5 +1,8 @@
 from pinecone import Pinecone
 from openai import OpenAI
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+import urllib.parse
 from pydantic import BaseModel
 from dotenv import load_dotenv
 from datetime import date
@@ -17,11 +20,26 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_HOST = os.getenv("PINECONE_INDEX_HOST")
 NAMESPACE = os.getenv("NAMESPACE")
+MONGODB_URI = os.getenv("MONGODB_URI")
 
 # Create client 
 pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(host=PINECONE_INDEX_HOST)
 client = OpenAI(api_key=OPENAI_API_KEY)
+
+# Setup MongoDB connection
+if MONGODB_URI and "://" in MONGODB_URI:
+    from urllib.parse import quote_plus, urlparse
+    parsed = urlparse(MONGODB_URI)
+    if parsed.username and parsed.password:
+        encoded_username = quote_plus(parsed.username)
+        encoded_password = quote_plus(parsed.password)
+        MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
+                                         f"{encoded_username}:{encoded_password}@")
+
+mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
+db = mongo_client['cigna_insurance']
+collection = db['insurance_plans']
 
 # Initialize tokenizer and NER pipeline
 tokenizer = tiktoken.encoding_for_model("gpt-4")
@@ -279,6 +297,9 @@ def plan_discovery_node(user_query: str, currentSession: SessionState):
 
     print(f"\n=== PLAN DISCOVERY DEBUG ===")
     
+    # Update conversation history with user query first
+    currentSession.update_chat_history("user", user_query)
+    
     conversation_history = currentSession.format_conversation_history()
     current_answers = currentSession.plan_discovery_answers.model_dump_json() if currentSession.plan_discovery_answers else "{}"
     
@@ -313,31 +334,301 @@ def plan_discovery_node(user_query: str, currentSession: SessionState):
     
     currentSession.plan_discovery_answers = parsed.plan_discovery_answers
     
-    # Update chat history
-    currentSession.update_chat_history("user", user_query)
+    # Update chat history with assistant response
     currentSession.update_chat_history("assistant", parsed.response)
+    
     
     print(f"=== END DEBUG ===\n")
 
     return parsed.response
 
+def map_business_size_to_categories(employee_count: int) -> list[str]:
+    """
+    Map employee count to all applicable business size categories.
+    Returns list of categories that the business size qualifies for.
+    """
+    categories = []
+    
+    if 2 <= employee_count <= 50:
+        categories.append("2-50")
+    if 2 <= employee_count <= 99:
+        categories.append("2-99")
+    if 51 <= employee_count <= 99:
+        categories.append("51-99")
+    if 100 <= employee_count <= 499:
+        categories.append("100-499")
+    if 500 <= employee_count <= 2999:
+        categories.append("500-2,999")
+    if employee_count >= 3000:
+        categories.append("3,000+")
+    
+    # Also add "All sizes" as it matches any business
+    categories.append("All sizes")
+    
+    return categories
+
+def search_eligible_plans(plan_answers: PlanDiscoveryAnswers):
+    """
+    Search MongoDB for insurance plans that match user's business profile.
+    Returns a dictionary where key is plan name and value is raw text.
+    """
+    print(f"\n=== PLAN SEARCH DEBUG ===")
+    print(f"Searching MongoDB for plans with:")
+    print(f"  Business Size: {plan_answers.business_size}")
+    print(f"  Location: {plan_answers.location}")
+    print(f"  Coverage Preference: {plan_answers.coverage_preference}")
+    
+    # Build MongoDB query filters
+    query_filters = {}
+    
+    # Coverage preference filter (Network Type)
+    if plan_answers.coverage_preference:
+        query_filters["Network Type"] = plan_answers.coverage_preference
+    
+    # Build list of filters to combine
+    filters_list = []
+    
+    # Business size filter
+    if plan_answers.business_size:
+        size_categories = map_business_size_to_categories(plan_answers.business_size)
+        filters_list.append({
+            "$or": [
+                {"Business Size Eligibility": {"$in": size_categories}},
+                {"Business Size Eligibility": "All sizes"}
+            ]
+        })
+    
+    # Location filter
+    if plan_answers.location:
+        filters_list.append({
+            "$or": [
+                {"location_availability": {"$in": [plan_answers.location]}},
+                {"location_availability": {"$in": ["All states"]}}
+            ]
+        })
+    
+    # Combine all filters
+    if len(filters_list) > 1:
+        query_filters["$and"] = filters_list
+    elif len(filters_list) == 1:
+        query_filters.update(filters_list[0])
+    
+    print(f"  MongoDB query: {query_filters}")
+    
+    # Query MongoDB
+    try:
+        cursor = collection.find(query_filters)
+        matching_docs = list(cursor)
+        print(f"  Found {len(matching_docs)} matching documents")
+        
+        # Create dictionary: plan_name -> raw_text
+        plan_dict = {}
+        for doc in matching_docs:
+            plan_name = doc.get("Plan Type", "Unknown Plan")
+            raw_text = doc.get("raw_text", "")
+            
+            if plan_name != "Unknown Plan" and raw_text:
+                plan_dict[plan_name] = raw_text
+                print(f"    Added plan: {plan_name}")
+            else:
+                print(f"    Skipped document with missing Plan Type or raw_text")
+        
+        print(f"  Returning {len(plan_dict)} unique plans")
+        print(f"  Plan names: {list(plan_dict.keys())}")
+        print(f"=== END PLAN SEARCH ===\n")
+        
+        return plan_dict
+        
+    except Exception as e:
+        print(f"Error searching MongoDB: {e}")
+        return {}
+
+def intelligently_summarize_plan(plan_name: str, raw_text: str) -> str:
+    """
+    Use LLM to create an intelligent summary of an insurance plan that preserves
+    all relevant information for comparison purposes.
+    """
+
+    print(f"  Summarizing plan: {plan_name}")
+
+    with open("prompts/plan_summary.txt") as f:
+        prompt_template = f.read()
+    
+    # Format the prompt with actual variables
+    prompt = prompt_template.format(
+        plan_name=plan_name,
+        raw_text=raw_text,
+    )
+
+    try:
+        response = client.responses.parse(
+            model="gpt-4o-mini",
+            input=[{"role": "user", "content": prompt}],
+            user=str(uuid.uuid4()),
+            text_format=ChatResponse
+        )
+        
+        summary = response.output_parsed.response
+        print(f"    Summary length: {len(summary)} characters (original: {len(raw_text)})")
+        return summary
+        
+    except Exception as e:
+        print(f"    Error summarizing plan {plan_name}: {e}")
+        # Return truncated version as fallback
+        return raw_text[:3000] + "..." if len(raw_text) > 3000 else raw_text
+
+def reason_about_plans(eligible_plans: dict, plan_answers: PlanDiscoveryAnswers) -> str:
+    """
+    Use reasoning model to analyze and rank insurance plans based on business profile.
+    Returns comprehensive analysis and recommendation.
+    """
+    print(f"\n=== REASONING ABOUT PLANS ===")
+    print(f"Analyzing {len(eligible_plans)} eligible plans for business profile...")
+    
+    # Intelligently summarize each plan
+    print("Creating intelligent summaries...")
+    plan_summaries = {}
+    for plan_name, raw_text in eligible_plans.items():
+        summary = intelligently_summarize_plan(plan_name, raw_text)
+        plan_summaries[plan_name] = summary
+    
+    # Create formatted summaries text
+    summaries_text = "\n\n".join([f"=== {plan} ===\n{summary}" for plan, summary in plan_summaries.items()])
+    
+    with open("prompts/reason_about_plans.txt") as f:
+        prompt_template = f.read()
+    
+    # Format the prompt with actual variables
+    prompt = prompt_template.format(
+        business_size=plan_answers.business_size,
+        location=plan_answers.location,
+        coverage_preference=plan_answers.coverage_preference,
+        plan_summaries=summaries_text
+    )
+
+    try:
+        response = client.responses.parse(
+            model="o4-mini",
+            input=[{"role": "user", "content": prompt}],
+            user=str(uuid.uuid4()),
+            reasoning={"effort": "medium"},
+            text_format=ChatResponse
+        )
+        
+        analysis_result = response.output_parsed.response
+        
+        print(f"\nPlan analysis and ranking complete!")
+        print("="*60)
+        print(analysis_result)
+        print("="*60)
+        
+        return analysis_result
+        
+    except Exception as e:
+        print(f"Error analyzing plans: {e}")
+        return f"Error occurred during plan analysis. Available plans: {list(eligible_plans.keys())}"
+
+def complete_insurance_workflow(currentSession: SessionState):
+    """
+    Orchestrates the complete insurance recommendation workflow:
+    1. Plan discovery (collect business profile)
+    2. Search eligible plans
+    3. Reason about and rank plans
+    """
+    print(f"\n{'='*60}")
+    print("STARTING COMPLETE INSURANCE WORKFLOW")
+    print(f"{'='*60}")
+    
+    # Step 1: Plan Discovery
+    print("\n=== STEP 1: PLAN DISCOVERY ===")
+    print("Let's start by understanding your business needs...")
+    
+    # Run plan discovery loop until we have complete information
+    while not (currentSession.plan_discovery_answers and 
+               currentSession.plan_discovery_answers.business_size and
+               currentSession.plan_discovery_answers.location and 
+               currentSession.plan_discovery_answers.coverage_preference):
+        
+        user_query = input("\nYou: ")
+        if user_query.lower() in ["exit", "quit"]:
+            return "Workflow cancelled by user."
+            
+        response = plan_discovery_node(user_query, currentSession)
+        print(f"\nAssistant: {response}")
+    
+    print(f"\n✓ Plan discovery complete!")
+    print(f"  Business Size: {currentSession.plan_discovery_answers.business_size} employees")
+    print(f"  Location: {currentSession.plan_discovery_answers.location}")
+    print(f"  Coverage Preference: {currentSession.plan_discovery_answers.coverage_preference}")
+    
+    # Step 2: Search Eligible Plans
+    print(f"\n=== STEP 2: SEARCHING ELIGIBLE PLANS ===")
+    eligible_plans = search_eligible_plans(currentSession.plan_discovery_answers)
+    
+    if not eligible_plans:
+        return "No eligible plans found for your business profile. Please contact us directly for assistance."
+    
+    print(f"✓ Found {len(eligible_plans)} eligible plans")
+    
+    # Step 3: Reason About Plans
+    print(f"\n=== STEP 3: ANALYZING AND RANKING PLANS ===")
+    analysis_result = reason_about_plans(eligible_plans, currentSession.plan_discovery_answers)
+    
+    print(f"\n✓ Analysis complete! Here's your personalized recommendation:")
+    print(f"\n{analysis_result}")
+    
+    print(f"\n{'='*60}")
+    print("INSURANCE WORKFLOW COMPLETE")
+    print(f"{'='*60}")
+    
+    return analysis_result
+
 
 
 # Chat loop
 if __name__ == "__main__":
-    currentSession = SessionState()
-
-    # Conversational Loop 
-    print("Hello, welcome to Cigna Health Insurance! I am a helpful bot designed to help your company buy health insurance.")
-    print("To begin, could you please tell me a bit about your business and its health insurance needs?")
-
-    while True:
-        query = input("\nYou: ")
-        if query.lower() in ["exit", "quit"]:
-            break
+    # # Test MongoDB search with dummy data
+    # print("=== TESTING MONGODB SEARCH ===")
+    
+    # dummy_answers = PlanDiscoveryAnswers(
+    #     business_size=40,
+    #     location="CA", 
+    #     coverage_preference="National"
+    # )
+    
+    # print("Testing with dummy plan discovery answers:")
+    # print(f"  Business Size: {dummy_answers.business_size} employees")
+    # print(f"  Location: {dummy_answers.location}")
+    # print(f"  Coverage Preference: {dummy_answers.coverage_preference}")
+    
+    # # Test the mapping function
+    # size_categories = map_business_size_to_categories(dummy_answers.business_size)
+    # print(f"  Size categories: {size_categories}")
+    
+    # # Test MongoDB search
+    # test_results = search_eligible_plans(dummy_answers)
+    # print(f"\nTest Results: Found {len(test_results)} matching plans")
+    # for plan_name, raw_text in test_results.items():
+    #     print(f"  Plan: {plan_name} (Text length: {len(raw_text)} characters)")
+    
+    # # Test plan reasoning if we found eligible plans
+    # if test_results:
+    #     print("\n" + "="*50)
+    #     print("Testing plan reasoning and ranking...")
+    #     analysis_result = reason_about_plans(test_results, dummy_answers)
         
-        response = plan_discovery_node(query, currentSession)
-
-        print("\nAssistant:", response)
+    # print("\n" + "="*50)
+    # print("All tests complete!")
+    
+    print("\n" + "="*60)
+    print("TESTING COMPLETE WORKFLOW")
+    print("="*60)
+    
+    # Start the complete workflow
+    currentSession = SessionState()
+    print("Hello! I'm here to help you find the best Cigna insurance plan for your business.")
+    print("To get started, could you tell me about your business and its insurance needs?")
+    
+    complete_insurance_workflow(currentSession)
 
 

@@ -13,6 +13,10 @@ from pydantic import BaseModel, create_model
 from typing import Literal
 import os
 import json
+import urllib.parse
+
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 
 # Load environment variables
 load_dotenv()
@@ -21,6 +25,34 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_HOST = os.getenv("PINECONE_INDEX_HOST")
 NAMESPACE = os.getenv("NAMESPACE")
 HTML_CACHE_DIR = Path(os.getenv("HTML_CACHE_DIR"))
+MONGODB_URI= os.getenv("MONGODB_URI")
+
+# ---------------- MONGO SUPPORT ---------------------------
+
+# URL encode the MongoDB URI to handle special characters
+if MONGODB_URI and "://" in MONGODB_URI:
+    # Parse the URI to extract and encode credentials
+    from urllib.parse import quote_plus, urlparse
+    parsed = urlparse(MONGODB_URI)
+    if parsed.username and parsed.password:
+        encoded_username = quote_plus(parsed.username)
+        encoded_password = quote_plus(parsed.password)
+        MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
+                                         f"{encoded_username}:{encoded_password}@")
+
+# Create a new client and connect to the server
+mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
+db = mongo_client['cigna_insurance']
+collection = db['insurance_plans']
+
+# Send a ping to confirm a successful connection
+try:
+    mongo_client.admin.command('ping')
+    print("Pinged your deployment. You successfully connected to MongoDB!")
+except Exception as e:
+    print(e)
+# ----------------- END MONGO SUPPORT --------------------------
+
 
 file_path = Path("insurance_models.py")
 
@@ -62,7 +94,6 @@ class PlanAnalysis(BaseModel):
     required_fields: list[str]
     key_differences: list[list[str]]
 
-
 # HELPTER FUNCTIONS
 def aggregate_page_contents(documents: list[Document], separator: str = "---NEW DOCUMENT---") -> str:
     """Aggregates the page_content of each LangChain Document into a single string with separators."""
@@ -97,7 +128,6 @@ def generate_metadata_tagger(Metadata: BaseModel):
     llm = ChatOpenAI(temperature=0, model="gpt-4.1")
     document_transformer = create_metadata_tagger(Metadata, llm)
 
-
 # MAIN FUNCTIONS
 
 # Generate fields for insurance models and write them to insurance_models.py
@@ -131,7 +161,7 @@ def fit_info_into_models(cleaned_plans: list[Document], InsuranceModel: BaseMode
         insurance_model_prompt = f.read()
 
     with open("prompts/metadata.txt") as f:
-        insurance_model_prompt = f.read()
+        metadata_prompt = f.read()
 
     insurance_plans = []
 
@@ -169,8 +199,80 @@ def fit_info_into_models(cleaned_plans: list[Document], InsuranceModel: BaseMode
         print("--- End of Plan ---\n")
 
     return insurance_plans
-        
 
+def generate_page_metadata(page_content: str, page_url: str) -> dict:
+    """
+    Generate metadata for a single scraped page using OpenAI reasoning model.
+    Returns metadata as a dictionary.
+    """
+    print(f"Generating metadata for: {page_url}")
+    
+    with open("prompts/metadata.txt") as f:
+        metadata_prompt = f.read()
+
+    try:
+        raw_response = client.responses.parse(
+            model="o4-mini",
+            input=[{"role": "user", "content": f"{metadata_prompt}\n\n{page_content}"}],
+            user=SESSION_ID,
+            reasoning={"effort": "medium"},
+            text_format=DynamicMetaDataTags
+        )
+        
+        metadata = raw_response.output_parsed.model_dump()
+        print(f"  Generated metadata with {len(metadata)} fields")
+        return metadata
+        
+    except Exception as e:
+        print(f"  Error generating metadata: {e}")
+        return {}
+
+def upload_to_mongodb(page_content: str, metadata: dict, page_url: str):
+    """
+    Upload a document to MongoDB with metadata and raw text content.
+    """
+    try:
+        # Create document with metadata fields + raw_text field
+        document = metadata.copy()
+        document['raw_text'] = page_content
+        document['source_url'] = page_url
+        
+        # Insert into MongoDB collection
+        result = collection.insert_one(document)
+        print(f"  Uploaded to MongoDB with ID: {result.inserted_id}")
+        return result.inserted_id
+        
+    except Exception as e:
+        print(f"  Error uploading to MongoDB: {e}")
+        return None
+
+def process_pages_to_mongodb(cleaned_plans: list[Document]):
+    """
+    Process each scraped page individually and upload to MongoDB.
+    """
+    print(f"\n=== PROCESSING {len(cleaned_plans)} PAGES TO MONGODB ===")
+    
+    uploaded_count = 0
+    
+    for idx, doc in enumerate(cleaned_plans, 1):
+        print(f"\n--- Processing Page {idx}/{len(cleaned_plans)} ---")
+        page_url = doc.metadata.get('source', f'page_{idx}')
+        
+        # Generate metadata for this page
+        metadata = generate_page_metadata(doc.page_content, page_url)
+        
+        if metadata:
+            # Upload to MongoDB
+            doc_id = upload_to_mongodb(doc.page_content, metadata, page_url)
+            if doc_id:
+                uploaded_count += 1
+        
+        print(f"--- End Page {idx} ---")
+    
+    print(f"\n=== MONGODB UPLOAD COMPLETE ===")
+    print(f"Successfully uploaded {uploaded_count}/{len(cleaned_plans)} documents")
+    return uploaded_count
+        
 
 if __name__ == "__main__":
     # scrape all plan info
@@ -205,12 +307,13 @@ if __name__ == "__main__":
         print("\n\n")
 
 
-    print("\n=== PART 4: FIT INSURANCE INFO INTO MODELS ===")
-    insurance_plans = fit_info_into_models(clean_data, DynamicInsurancePlanModel, DynamicMetaDataTags)
-
-    print("\n=== PART 5: CHUNK AND UPLOAD INSURANCE CONTENT ===")
-    chunked_data = smart_scraper.chunk_data(insurance_plans)
-    smart_scraper.upload_data(chunked_data, PINECONE_API_KEY, PINECONE_INDEX_HOST, "insurance_models")
+    print("\n=== PART 4: PROCESS PAGES AND UPLOAD TO MONGODB ===")
+    uploaded_count = process_pages_to_mongodb(clean_data)
+    
+    print(f"\n=== PROCESSING COMPLETE ===")
+    print(f"Total pages processed: {len(clean_data)}")
+    print(f"Successfully uploaded to MongoDB: {uploaded_count}")
+    print(f"MongoDB Collection: cigna_insurance.insurance_plans")
 
     print("\n--- Cigna Data Processing Script Finished ---")
 

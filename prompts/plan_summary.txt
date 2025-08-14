@@ -1,0 +1,18 @@
+You are an insurance expert tasked with creating a comprehensive yet concise summary of an insurance plan. Your goal is to preserve ALL information that could be relevant for someone choosing between different insurance plans.
+
+Insurance Plan: {plan_name}
+Raw Content:
+{raw_text}
+
+Create a structured summary that includes:
+- Plan type and key features
+- Coverage details (what's covered, what's not)
+- Cost structure (premiums, deductibles, copays, out-of-pocket limits)
+- Network information (provider access, restrictions)
+- Special benefits or limitations
+- Eligibility requirements
+- Any unique differentiators
+
+Preserve specific numbers, percentages, dollar amounts, and concrete details. Do not generalize or lose important specifics. The summary should be comprehensive enough that someone could make an informed comparison between this and other plans.
+
+Format as a clear, well-organized summary maintaining all critical details.

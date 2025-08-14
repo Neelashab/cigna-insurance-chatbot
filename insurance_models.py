@@ -60,10 +60,7 @@
     [
       "Network Type",
       "National",
-      "Local",
-      "Limited",
-      "Open",
-      "None (Indemnity)"
+      "Local"
     ],
     [
       "PCP Requirement",
@@ -104,11 +101,11 @@
     ],
     [
       "Business Size Eligibility",
-      "2-50 employees (Small Group)",
-      "2-99 employees",
-      "100-499 employees",
-      "500-2,999 employees",
-      "Enterprise (3,000+)",
+      "2-50",
+      "2-99",
+      "100-499",
+      "500-2,999",
+      "3,000+",
       "All sizes"
     ],
     [

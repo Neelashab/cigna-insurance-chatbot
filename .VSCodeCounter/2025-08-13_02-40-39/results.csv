@@ -1,0 +1,12 @@
+"filename", "language", "Python", "pip requirements", "JSON", "HTML", "Markdown", "comment", "blank", "total"
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/README.md", "Markdown", 0, 0, 0, 0, 2, 0, 1, 3
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/bad-tags.html", "HTML", 0, 0, 0, 6, 0, 0, 0, 6
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/generate_insurance_plans.py", "Python", 210, 0, 0, 0, 0, 99, 85, 394
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/insurance-agent.py", "Python", 374, 0, 0, 0, 0, 95, 118, 587
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/insurance_models.py", "Python", 127, 0, 0, 0, 0, 0, 1, 128
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/package-lock.json", "JSON", 0, 0, 212, 0, 0, 0, 1, 213
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/package.json", "JSON", 0, 0, 5, 0, 0, 0, 1, 6
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/requirements.txt", "pip requirements", 0, 45, 0, 0, 0, 0, 1, 46
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/schemas.py", "Python", 94, 0, 0, 0, 0, 0, 32, 126
+"/Users/neelashabhattacharjee/ai-projects/cigna-insurance-chatbot/smart_scraper.py", "Python", 203, 0, 0, 0, 0, 22, 55, 280
+"Total", "-", 1008, 45, 217, 6, 2, 216, 295, 1789

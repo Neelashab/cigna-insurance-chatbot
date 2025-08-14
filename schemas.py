@@ -115,7 +115,7 @@ class BusinessProfile(BaseModel):
 
 
 class PlanDiscoveryAnswers(BaseModel):
-    business_size: Optional[Literal["2-50", "51-99", "100-499", "500-2,999", "3,000+"]] = None
+    business_size: Optional[int] = None
     location: Optional[str] = None
     coverage_preference: Optional[Literal["National", "Local"]] = None
 
