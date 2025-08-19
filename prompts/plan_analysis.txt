@@ -4,7 +4,7 @@
     You will be given a list of documents, each containing detailed information about a specific group insurance plan offered by Cigna. These documents may vary in structure, language, and detail.
     Each document will be separated by a line containing the text "---NEW DOCUMENT---".
 
-    Your task is twofold:
+    Your task involves the following:
 
     1. Extract Required Fields:
     Review all documents collectively and determine a set of fields that should be used to represent these plans in a structured format. 
