@@ -370,7 +370,7 @@ def map_business_size_to_categories(employee_count: int) -> list[str]:
 def search_eligible_plans(plan_answers: PlanDiscoveryAnswers):
     """
     Search MongoDB for insurance plans that match user's business profile.
-    Returns a dictionary where key is plan name and value is raw text.
+    Returns a dictionary where key is plan name and value is summary text.
     """
     print(f"\n=== PLAN SEARCH DEBUG ===")
     print(f"Searching MongoDB for plans with:")
@@ -421,17 +421,17 @@ def search_eligible_plans(plan_answers: PlanDiscoveryAnswers):
         matching_docs = list(cursor)
         print(f"  Found {len(matching_docs)} matching documents")
         
-        # Create dictionary: plan_name -> raw_text
+        # Create dictionary: plan_name -> summary
         plan_dict = {}
         for doc in matching_docs:
             plan_name = doc.get("Plan Type", "Unknown Plan")
-            raw_text = doc.get("raw_text", "")
+            summary = doc.get("summary", "")
             
-            if plan_name != "Unknown Plan" and raw_text:
-                plan_dict[plan_name] = raw_text
+            if plan_name != "Unknown Plan" and summary:
+                plan_dict[plan_name] = summary
                 print(f"    Added plan: {plan_name}")
             else:
-                print(f"    Skipped document with missing Plan Type or raw_text")
+                print(f"    Skipped document with missing Plan Type or summary")
         
         print(f"  Returning {len(plan_dict)} unique plans")
         print(f"  Plan names: {list(plan_dict.keys())}")
@@ -443,40 +443,6 @@ def search_eligible_plans(plan_answers: PlanDiscoveryAnswers):
         print(f"Error searching MongoDB: {e}")
         return {}
 
-def intelligently_summarize_plan(plan_name: str, raw_text: str) -> str:
-    """
-    Use LLM to create an intelligent summary of an insurance plan that preserves
-    all relevant information for comparison purposes.
-    """
-
-    print(f"  Summarizing plan: {plan_name}")
-
-    with open("prompts/plan_summary.txt") as f:
-        prompt_template = f.read()
-    
-    # Format the prompt with actual variables
-    prompt = prompt_template.format(
-        plan_name=plan_name,
-        raw_text=raw_text,
-    )
-
-    try:
-        response = client.responses.parse(
-            model="gpt-4o-mini",
-            input=[{"role": "user", "content": prompt}],
-            user=str(uuid.uuid4()),
-            text_format=ChatResponse
-        )
-        
-        summary = response.output_parsed.response
-        print(f"    Summary length: {len(summary)} characters (original: {len(raw_text)})")
-        return summary
-        
-    except Exception as e:
-        print(f"    Error summarizing plan {plan_name}: {e}")
-        # Return truncated version as fallback
-        return raw_text[:3000] + "..." if len(raw_text) > 3000 else raw_text
-
 def reason_about_plans(eligible_plans: dict, plan_answers: PlanDiscoveryAnswers) -> str:
     """
     Use reasoning model to analyze and rank insurance plans based on business profile.
@@ -485,12 +451,9 @@ def reason_about_plans(eligible_plans: dict, plan_answers: PlanDiscoveryAnswers)
     print(f"\n=== REASONING ABOUT PLANS ===")
     print(f"Analyzing {len(eligible_plans)} eligible plans for business profile...")
     
-    # Intelligently summarize each plan
-    print("Creating intelligent summaries...")
-    plan_summaries = {}
-    for plan_name, raw_text in eligible_plans.items():
-        summary = intelligently_summarize_plan(plan_name, raw_text)
-        plan_summaries[plan_name] = summary
+    # Use stored summaries directly
+    print("Using stored plan summaries...")
+    plan_summaries = eligible_plans  # eligible_plans now contains summaries, not raw text
     
     # Create formatted summaries text
     summaries_text = "\n\n".join([f"=== {plan} ===\n{summary}" for plan, summary in plan_summaries.items()])

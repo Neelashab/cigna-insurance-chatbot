@@ -8,6 +8,10 @@ from pinecone import Pinecone
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+from datetime import datetime
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
+import urllib.parse
 
 # Load environment variables
 load_dotenv()
@@ -16,6 +20,21 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX_HOST = os.getenv("PINECONE_INDEX_HOST")
 NAMESPACE = os.getenv("NAMESPACE")
 HTML_CACHE_DIR = Path(os.getenv("HTML_CACHE_DIR"))
+MONGODB_URI = os.getenv("MONGODB_URI")
+
+# MongoDB setup
+if MONGODB_URI and "://" in MONGODB_URI:
+    from urllib.parse import quote_plus, urlparse
+    parsed = urlparse(MONGODB_URI)
+    if parsed.username and parsed.password:
+        encoded_username = quote_plus(parsed.username)
+        encoded_password = quote_plus(parsed.password)
+        MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
+                                         f"{encoded_username}:{encoded_password}@")
+
+mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
+db = mongo_client['cigna_insurance']
+scraped_collection = db['scraped_documents']  # New collection for scraped documents
 
 # SETUP 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -69,57 +88,102 @@ URLS = ["https://www.cigna.com/individuals-families/shop-plans/health-insurance-
 
 TEST = ["https://www.cigna.com/individuals-families/shop-plans/plans-through-employer/open-access-plus"]
 
-# Scrape and store HTMl if it doesn't exist in local cache
-def url_to_filename(url: str) -> str:
-    """Converts a URL to a safe filename."""
-    name = re.sub(r'^https?://', '', url)
-    name = re.sub(r'[<>:"/\\|?*&]', '_', name)
-    name = name.strip('_.')
-    # Limit length to avoid issues with very long URLs, though less critical for local cache
-    max_len = 100 
-    return name[:max_len] + ".html"
+def check_url_exists_in_mongodb(url: str) -> bool:
+    """Check if a URL already exists in MongoDB scraped documents collection"""
+    try:
+        existing = scraped_collection.find_one({"url": url})
+        return existing is not None
+    except Exception as e:
+        print(f"Error checking URL in MongoDB: {e}")
+        return False
 
-def scrape_and_store_if_not_exists(urls_to_scrape: list[str]) -> list[dict]:
+def load_document_from_mongodb(url: str) -> Document:
+    """Load a scraped document from MongoDB by URL"""
+    try:
+        doc = scraped_collection.find_one({"url": url})
+        if not doc:
+            raise Exception(f"Document not found for URL: {url}")
+        
+        return Document(
+            page_content=doc["cleaned_content"],
+            metadata={"source": doc["url"], "scraped_at": doc["scraped_at"]}
+        )
+    except Exception as e:
+        print(f"Error loading document from MongoDB: {e}")
+        raise
+
+def save_cleaned_document_to_mongodb(url: str, cleaned_content: str):
+    """Save cleaned document content to MongoDB"""
+    try:
+        document = {
+            "url": url,
+            "cleaned_content": cleaned_content,
+            "scraped_at": datetime.now()
+        }
+        
+        # Use upsert to replace existing document if URL already exists
+        result = scraped_collection.update_one(
+            {"url": url},
+            {"$set": document},
+            upsert=True
+        )
+        
+        if result.upserted_id:
+            print(f"STORED: Saved cleaned content for {url} to MongoDB with ID: {result.upserted_id}")
+        else:
+            print(f"UPDATED: Updated cleaned content for {url} in MongoDB")
+            
+        return result.upserted_id or result.matched_count
+        
+    except Exception as e:
+        print(f"Error saving document to MongoDB: {e}")
+        raise
+
+def scrape_and_store_if_not_exists(urls_to_scrape: list[str]) -> list[Document]:
     """
-    Scrapes HTML content from URLs. If a URL's content is already cached locally,
-    it loads from the cache. Otherwise, it fetches, stores it, and then returns it.
+    Scrapes and cleans HTML content from URLs. If a URL's content is already in MongoDB,
+    it loads from there. Otherwise, it fetches, cleans, stores in MongoDB, and returns cleaned Documents.
     """
-    HTML_CACHE_DIR.mkdir(exist_ok=True)
-    processed_data = []
+    processed_documents = []
 
     for url in urls_to_scrape:
-        filename = url_to_filename(url)
-        filepath = HTML_CACHE_DIR / filename
-        
-        html_content = None
-        loaded_from_cache = False
-
-        if filepath.exists():
-            print(f"CACHE HIT: Attempting to load content for {url} from {filepath}")
-            try:
-                html_content = filepath.read_text(encoding='utf-8')
-                processed_data.append({"url": url, "html": html_content})
-                loaded_from_cache = True
-            except Exception as e:
-                print(f"CACHE READ ERROR for {filepath}: {e}. Will attempt to re-fetch.")
-        
-        if not loaded_from_cache:
-            print(f"CACHE MISS or read error: Fetching content for {url}")
-            try:
+        try:
+            # Check if URL already exists in MongoDB
+            if check_url_exists_in_mongodb(url):
+                print(f"MONGO HIT: Loading cleaned content for {url} from MongoDB")
+                document = load_document_from_mongodb(url)
+                processed_documents.append(document)
+            else:
+                print(f"MONGO MISS: Fetching and cleaning content for {url}")
+                
+                # Fetch HTML content
                 res = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
-                res.raise_for_status()  # Raise an exception for HTTP errors (4xx or 5xx)
+                res.raise_for_status()
                 html_content = res.text
                 
-                filepath.write_text(html_content, encoding='utf-8')
-                print(f"STORED: Saved content for {url} to {filepath}")
-                processed_data.append({"url": url, "html": html_content})
-            except requests.exceptions.RequestException as e:
-                print(f"FETCH FAILED for {url}: {e}")
-            except Exception as e: 
-                print(f"An unexpected error occurred while fetching/storing {url}: {e}")
+                # Clean the content immediately
+                cleaned_content = parse_page(html_content)
                 
-    print(f"Finished scraping/loading. Total documents for processing: {len(processed_data)}")
-    return processed_data
+                if cleaned_content:
+                    # Save cleaned content to MongoDB
+                    save_cleaned_document_to_mongodb(url, cleaned_content)
+                    
+                    # Create Document object for return
+                    document = Document(
+                        page_content=cleaned_content,
+                        metadata={"source": url, "scraped_at": datetime.now()}
+                    )
+                    processed_documents.append(document)
+                else:
+                    print(f"WARNING: No content after cleaning for {url}")
+                    
+        except requests.exceptions.RequestException as e:
+            print(f"FETCH FAILED for {url}: {e}")
+        except Exception as e:
+            print(f"PROCESSING ERROR for {url}: {e}")
+                
+    print(f"Finished scraping/loading. Total cleaned documents: {len(processed_documents)}")
+    return processed_documents
 
 def parse_page(html: str) -> str:
     soup = bs4.BeautifulSoup(html, "html.parser")
@@ -154,35 +218,17 @@ def batch_upsert_to_pinecone(index, records, namespace="ns2", batch_size=96):
         print(f"Upserting batch of {len(batch)} records to namespace '{namespace}'...")
         index.upsert_records(namespace, batch) 
 
-def clean_data(data_to_process: list[dict]):
+def clean_data(scraped_documents: list[Document]) -> list[Document]:
     """
-    Cleans and chunks the provided data (list of dicts with 'url' and 'html')
+    DEPRECATED: This function is now a pass-through since cleaning happens during scraping.
+    Kept for backward compatibility - just returns the already-cleaned documents.
     """
-    if not data_to_process:
-        print("No data provided to chunk and upload. Skipping.")
-        return
-
-    print("CLEANING DOCUMENT CONTENT...")
-    cleaned_docs_for_langchain = []
-    for item in data_to_process:
-        text_content = parse_page(item["html"]) 
-        if text_content:
-            cleaned_docs_for_langchain.append(
-                Document(
-                    page_content=text_content,
-                    metadata={"source": item["url"]}
-                )
-            )
+    print("Note: Documents are already cleaned during scraping. Returning as-is.")
     
-    if not cleaned_docs_for_langchain:
-        print("No content remained after cleaning. Skipping further processing.")
-        return
-        
-    print(f"Cleaned {len(cleaned_docs_for_langchain)} documents.")
-    if cleaned_docs_for_langchain:
-        print(f"📄 Example cleaned content (first document, first 300 chars):\n{cleaned_docs_for_langchain[0].page_content[:300]}...\n")
+    if scraped_documents:
+        print(f"📄 Example cleaned content (first document, first 300 chars):\n{scraped_documents[0].page_content[:300]}...\n")
     
-    return cleaned_docs_for_langchain
+    return scraped_documents
 
 def chunk_data(cleaned_docs_for_langchain: list[Document]) -> list[Document]:
 
@@ -259,21 +305,17 @@ def upload_data(document_chunks: list[Document], pinecone_api_key: str, pinecone
 
 
 if __name__ == "__main__":
-    print("--- Starting Cigna Data Processing Script ---")
+    print("--- Starting Smart Scraper Test Script ---")
 
-    print("\n=== PART 1: SCRAPING AND STORING DATA ===")
-    retrieved_html_data = scrape_and_store_if_not_exists(TEST)
+    print("\n=== PART 1: SCRAPING AND CLEANING DATA (MongoDB) ===")
+    cleaned_documents = scrape_and_store_if_not_exists(TEST)
 
-    print("\n=== PART 2: PARSE AND CLEAN HTML CONTENT ===")
-    clean_data = clean_data(retrieved_html_data)
-    print(f"Cleaned data: \n", clean_data)
+    print("\n=== PART 2: CHUNKING CLEANED CONTENT ===")
+    document_chunks = chunk_data(cleaned_documents)
 
-    print("\n=== PART 3: SMARTLY CHUNK CLEANED CONTENT ===")
-    document_chunks = chunk_data(clean_data)
-
-    print("\n=== PART 4: UPLOAD TO DATABASE ===")
+    print("\n=== PART 3: UPLOAD TO PINECONE (Optional) ===")
     #upload_data(document_chunks, PINECONE_API_KEY, PINECONE_INDEX_HOST)
 
-    print("\n--- Cigna Data Processing Script Finished ---")
+    print("\n--- Smart Scraper Test Finished ---")
 
 

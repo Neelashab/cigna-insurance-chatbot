@@ -14,6 +14,7 @@ from typing import Literal
 import os
 import json
 import urllib.parse
+from datetime import datetime
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -44,6 +45,7 @@ if MONGODB_URI and "://" in MONGODB_URI:
 mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 db = mongo_client['cigna_insurance']
 collection = db['insurance_plans']
+models_collection = db['insurance_models']  # New collection for model metadata
 
 # Send a ping to confirm a successful connection
 try:
@@ -130,8 +132,8 @@ def generate_metadata_tagger(Metadata: BaseModel):
 
 # MAIN FUNCTIONS
 
-# Generate fields for insurance models and write them to insurance_models.py
-def plan_analysis(cleaned_plans: list[Document]) -> None:
+# Generate fields for insurance models and save them to MongoDB
+def plan_analysis(cleaned_plans: list[Document]) -> str:
 
     all_docs = aggregate_page_contents(cleaned_plans)
 
@@ -146,14 +148,9 @@ def plan_analysis(cleaned_plans: list[Document]) -> None:
 
     parsed = raw_response.output_parsed
 
-    model_input_data = {
-    "required_fields": parsed.required_fields,
-    "key_differences": parsed.key_differences
-    }       
-
-    # Write to file
-    with open(file_path, "w") as f:
-        json.dump(model_input_data, f, indent=2)
+    # Save to MongoDB instead of local file
+    models_id = save_models_to_mongodb(parsed.required_fields, parsed.key_differences)
+    return models_id
 
 # Fit info into models
 def fit_info_into_models(cleaned_plans: list[Document], InsuranceModel: BaseModel, Metadata: BaseModel):
@@ -227,15 +224,53 @@ def generate_page_metadata(page_content: str, page_url: str) -> dict:
         print(f"  Error generating metadata: {e}")
         return {}
 
+def generate_document_summary(page_content: str, plan_name: str) -> str:
+    """
+    Generate a summary of the document content using the same prompt as the existing system.
+    """
+    print(f"    Generating summary for: {plan_name}")
+    
+    class SummaryResponse(BaseModel):
+        summary: str
+    
+    with open("prompts/plan_summary.txt") as f:
+        prompt_template = f.read()
+    
+    prompt = prompt_template.format(
+        plan_name=plan_name,
+        raw_text=page_content
+    )
+
+    try:
+        response = client.responses.parse(
+            model="gpt-4o-mini",
+            input=[{"role": "user", "content": prompt}],
+            user=SESSION_ID,
+            text_format=SummaryResponse
+        )
+        
+        summary = response.output_parsed.summary
+        print(f"    Summary generated ({len(summary)} characters)")
+        return summary
+        
+    except Exception as e:
+        print(f"    Error generating summary: {e}")
+        return page_content[:3000] + "..." if len(page_content) > 3000 else page_content
+
 def upload_to_mongodb(page_content: str, metadata: dict, page_url: str):
     """
-    Upload a document to MongoDB with metadata and raw text content.
+    Upload a document to MongoDB with metadata, raw text content, and AI-generated summary.
     """
     try:
         # Create document with metadata fields + raw_text field
         document = metadata.copy()
         document['raw_text'] = page_content
         document['source_url'] = page_url
+        
+        # Generate and add summary
+        plan_name = metadata.get('Plan Type', 'Unknown Plan')
+        summary = generate_document_summary(page_content, plan_name)
+        document['summary'] = summary
         
         # Insert into MongoDB collection
         result = collection.insert_one(document)
@@ -245,6 +280,105 @@ def upload_to_mongodb(page_content: str, metadata: dict, page_url: str):
     except Exception as e:
         print(f"  Error uploading to MongoDB: {e}")
         return None
+
+# ==================== MODEL METADATA MONGODB FUNCTIONS ====================
+
+def upload_local_models_to_mongodb():
+    """
+    ONE-TIME USE FUNCTION: Upload local insurance_models.py file to MongoDB
+    Assumes no existing models in MongoDB
+    """
+    models_path = Path("insurance_models.py")
+    
+    if not models_path.exists():
+        raise Exception("Local insurance_models.py file not found. Cannot upload to MongoDB.")
+    
+    try:
+        with open("insurance_models.py") as f:
+            model_data = json.load(f)
+        
+        # Create document to store in MongoDB
+        models_document = {
+            "model_type": "insurance_models",
+            "version": 1,
+            "created_at": datetime.now(),
+            "required_fields": model_data["required_fields"],
+            "key_differences": model_data["key_differences"]
+        }
+        
+        # Insert into MongoDB
+        result = models_collection.insert_one(models_document)
+        print(f"Uploaded models to MongoDB with ID: {result.inserted_id}")
+        return result.inserted_id
+    
+    except Exception as e:
+        print(f"Error uploading models to MongoDB: {e}")
+        raise
+
+def check_models_exist_in_mongodb() -> bool:
+    """Check if insurance models exist in MongoDB"""
+    try:
+        existing = models_collection.find_one({"model_type": "insurance_models"})
+        return existing is not None
+    except Exception as e:
+        print(f"Error checking models in MongoDB: {e}")
+        return False
+
+def load_models_from_mongodb() -> dict:
+    """Load insurance models from MongoDB"""
+    try:
+        models_doc = models_collection.find_one({"model_type": "insurance_models"})
+        
+        if not models_doc:
+            raise Exception("Insurance models not found in MongoDB")
+        
+        return {
+            "required_fields": models_doc["required_fields"],
+            "key_differences": models_doc["key_differences"]
+        }
+    
+    except Exception as e:
+        print(f"Error loading models from MongoDB: {e}")
+        raise
+
+def save_models_to_mongodb(required_fields: list[str], key_differences: list[list[str]]) -> str:
+    """Save newly analyzed models to MongoDB"""
+    try:
+        models_document = {
+            "model_type": "insurance_models",
+            "version": 1,
+            "created_at": datetime.now(),
+            "required_fields": required_fields,
+            "key_differences": key_differences
+        }
+        
+        # Check if models already exist
+        existing = models_collection.find_one({"model_type": "insurance_models"})
+        
+        if existing:
+            # Update existing
+            result = models_collection.update_one(
+                {"model_type": "insurance_models"},
+                {
+                    "$set": {
+                        "version": existing.get("version", 0) + 1,
+                        "updated_at": datetime.now(),
+                        "required_fields": required_fields,
+                        "key_differences": key_differences
+                    }
+                }
+            )
+            print(f"Updated models in MongoDB. Modified count: {result.modified_count}")
+            return str(existing["_id"])
+        else:
+            # Insert new
+            result = models_collection.insert_one(models_document)
+            print(f"Saved new models to MongoDB with ID: {result.inserted_id}")
+            return str(result.inserted_id)
+    
+    except Exception as e:
+        print(f"Error saving models to MongoDB: {e}")
+        raise
 
 def process_pages_to_mongodb(cleaned_plans: list[Document]):
     """
@@ -278,23 +412,18 @@ if __name__ == "__main__":
     # scrape all plan info
 
     print("--- Starting Cigna Plan Processing Script ---")
-    print("INSURANCE MODELS DO NOT EXIST, GENERATING THEM NOW...")
-    print("\n=== PART 1: SCRAPING AND STORING DATA ===")
-    retrieved_html_data = smart_scraper.scrape_and_store_if_not_exists(plan_links)
+    print("\n=== PART 1: SCRAPING AND CLEANING DATA (MongoDB) ===")
+    clean_data = smart_scraper.scrape_and_store_if_not_exists(plan_links)
 
-    print("\n=== PART 2: PARSE AND CLEAN HTML CONTENT ===")
-    clean_data = smart_scraper.clean_data(retrieved_html_data)
-
-    if not file_path.exists():
-        print("\n=== PART 2.5: ANALYZE PLANS FOR REQUIRED FIELDS AND KEY DIFFERENCES ===")
+    print("\n=== PART 2: CHECK MODELS IN MONGODB ===")
+    if not check_models_exist_in_mongodb():
+        print("Insurance models not found in MongoDB, analyzing plans...")
         plan_analysis(clean_data)
-
     else: 
-        print("USING EXISTING INSURANCE MODELS....")
+        print("Using existing insurance models from MongoDB...")
     
-    print("\n=== PART 3: LOAD MODEL INPUTS ===")
-    with open("insurance_models.py") as f:
-        data = json.load(f)
+    print("\n=== PART 3: LOAD MODEL INPUTS FROM MONGODB ===")
+    data = load_models_from_mongodb()
 
     DynamicInsurancePlanModel, DynamicMetaDataTags = generate_pydantic_models(
     required_fields=data["required_fields"],
@@ -306,7 +435,6 @@ if __name__ == "__main__":
             print(f"{field_name}: {field_info.annotation}")
         print("\n\n")
 
-
     print("\n=== PART 4: PROCESS PAGES AND UPLOAD TO MONGODB ===")
     uploaded_count = process_pages_to_mongodb(clean_data)
     
@@ -316,7 +444,6 @@ if __name__ == "__main__":
     print(f"MongoDB Collection: cigna_insurance.insurance_plans")
 
     print("\n--- Cigna Data Processing Script Finished ---")
-
 
 
 
