@@ -10,5 +10,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Run the application
-CMD exec uvicorn api:app --host 0.0.0.0 --port $PORT
+# Expose port 8080 as Cloud Run services listen on this port by default
+ENV PORT 8080
+EXPOSE 8080
+
+# Run the application when the container launches
+CMD ["python3", "api.py"]
