@@ -1,0 +1,23 @@
+steps:
+# Build the image
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA', '.']
+# Push the image to Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA']
+# Deploy image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: [
+    'run', 'deploy', 'cigna-insurance-chatbot', 
+    '--image', 'us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA', 
+    '--region', 'us-east4',
+    '--platform', 'managed',
+    '--allow-unauthenticated',
+    '--memory', '2Gi',
+    '--cpu', '2',
+    '--timeout', '3600',
+    '--max-instances', '10'
+  ]
+images:
+- 'us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA'
