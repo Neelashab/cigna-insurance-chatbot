@@ -1,5 +1,5 @@
 # Minimal Dockerfile for Cloud Run
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -11,7 +11,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Expose port 8080 as Cloud Run services listen on this port by default
-ENV PORT 8080
 EXPOSE 8080
 
 # Run the application when the container launches
