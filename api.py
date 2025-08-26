@@ -150,6 +150,10 @@ def get_job_info(job_id: str) -> Optional[JobInfo]:
 async def root():
     return {"message": "Cigna Insurance Chatbot API is running"}
 
+@app.get("/test/hello")
+async def test_hello():
+    return {"message": "Hello from continuous deployment!", "timestamp": datetime.now().isoformat()}
+
 @app.post("/session")
 async def create_session():
     """Create a new session"""
