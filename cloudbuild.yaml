@@ -45,5 +45,5 @@ images:
   - "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA"
 
 options:
-  machineType: "E2_HIGHCPU_32"
+  machineType: "E2_HIGHCPU_8"
   logging: CLOUD_LOGGING_ONLY
