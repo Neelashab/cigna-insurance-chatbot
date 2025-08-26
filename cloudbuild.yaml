@@ -5,7 +5,7 @@ steps:
       [
         "build",
         "-t",
-        "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA",
+        "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-chatbot-server:$COMMIT_SHA",
         ".",
       ]
   # Push the image to Artifact Registry
@@ -13,7 +13,7 @@ steps:
     args:
       [
         "push",
-        "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA",
+        "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-chatbot-server:$COMMIT_SHA",
       ]
   # Deploy image to Cloud Run
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
@@ -42,7 +42,7 @@ steps:
         "10",
       ]
 images:
-  - "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA"
+  - "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-chatbot-server:$COMMIT_SHA"
 
 options:
   machineType: "E2_HIGHCPU_8"
