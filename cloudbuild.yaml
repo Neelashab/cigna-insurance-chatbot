@@ -28,7 +28,7 @@ steps:
         "--region",
         "us-east4",
         "--set-secrets",
-        "PINECONE_API_KEY=PINECONE_API_KEY:latest,PINECONE_INDEX_HOST=PINECONE_INDEX_HOST:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,NAMESPACE=NAMESPACE:latest,HTML_CACHE_DIR=HTML_CACHE_DIR:latest,MONGODB_URI=MONGODB_URI:latest",
+        "PINECONE_API_KEY=PINECONE_API_KEY:latest,PINECONE_INDEX_HOST=PINECONE_INDEX_HOST:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,NAMESPACE=NAMESPACE:latest,MONGODB_URI=MONGODB_URI:latest",
         "--platform",
         "managed",
         "--allow-unauthenticated",
