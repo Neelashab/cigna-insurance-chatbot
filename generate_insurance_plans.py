@@ -31,15 +31,15 @@ MONGODB_URI= os.getenv("MONGODB_URI")
 # ---------------- MONGO SUPPORT ---------------------------
 
 # URL encode the MongoDB URI to handle special characters
-if MONGODB_URI and "://" in MONGODB_URI:
-    # Parse the URI to extract and encode credentials
-    from urllib.parse import quote_plus, urlparse
-    parsed = urlparse(MONGODB_URI)
-    if parsed.username and parsed.password:
-        encoded_username = quote_plus(parsed.username)
-        encoded_password = quote_plus(parsed.password)
-        MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
-                                         f"{encoded_username}:{encoded_password}@")
+# if MONGODB_URI and "://" in MONGODB_URI:
+#     # Parse the URI to extract and encode credentials
+#     from urllib.parse import quote_plus, urlparse
+#     parsed = urlparse(MONGODB_URI)
+#     if parsed.username and parsed.password:
+#         encoded_username = quote_plus(parsed.username)
+#         encoded_password = quote_plus(parsed.password)
+#         MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
+#                                          f"{encoded_username}:{encoded_password}@")
 
 # Create a new client and connect to the server
 mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))

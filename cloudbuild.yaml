@@ -24,7 +24,7 @@ steps:
         "deploy",
         "cigna-insurance-chatbot",
         "--image",
-        "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-insurance-chatbot:$COMMIT_SHA",
+        "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-chatbot-server:$COMMIT_SHA",
         "--region",
         "us-east4",
         "--set-secrets",

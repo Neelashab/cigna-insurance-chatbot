@@ -23,14 +23,14 @@ HTML_CACHE_DIR = Path(os.getenv("HTML_CACHE_DIR"))
 MONGODB_URI = os.getenv("MONGODB_URI")
 
 # MongoDB setup
-if MONGODB_URI and "://" in MONGODB_URI:
-    from urllib.parse import quote_plus, urlparse
-    parsed = urlparse(MONGODB_URI)
-    if parsed.username and parsed.password:
-        encoded_username = quote_plus(parsed.username)
-        encoded_password = quote_plus(parsed.password)
-        MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
-                                         f"{encoded_username}:{encoded_password}@")
+# if MONGODB_URI and "://" in MONGODB_URI:
+#     from urllib.parse import quote_plus, urlparse
+#     parsed = urlparse(MONGODB_URI)
+#     if parsed.username and parsed.password:
+#         encoded_username = quote_plus(parsed.username)
+#         encoded_password = quote_plus(parsed.password)
+#         MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
+#                                          f"{encoded_username}:{encoded_password}@")
 
 mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 db = mongo_client['cigna_insurance']
