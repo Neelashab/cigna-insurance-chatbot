@@ -22,7 +22,7 @@ steps:
       [
         "run",
         "deploy",
-        "cigna-insurance-chatbot",
+        "cigna-chatbot-server",
         "--image",
         "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-chatbot-server:$COMMIT_SHA",
         "--region",
