@@ -27,8 +27,6 @@ steps:
         "us-east4-docker.pkg.dev/still-kit-452818-a6/cloud-run-source-deploy/cigna-chatbot-server:$COMMIT_SHA",
         "--region",
         "us-east4",
-        "--set-secrets",
-        "PINECONE_API_KEY=PINECONE_API_KEY:latest,PINECONE_INDEX_HOST=PINECONE_INDEX_HOST:latest,OPENAI_API_KEY=OPENAI_API_KEY:latest,NAMESPACE=NAMESPACE:latest,MONGODB_URI=MONGODB_URI:latest",
         "--platform",
         "managed",
         "--allow-unauthenticated",
