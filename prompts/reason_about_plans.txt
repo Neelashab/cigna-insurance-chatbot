@@ -11,7 +11,7 @@ AVAILABLE INSURANCE PLANS:
 Your task is to thoroughly analyze each plan and provide a comprehensive ranking with detailed reasoning. You should:
 
 1. **Determine your own evaluation criteria** based on what you believe is most important for this specific business profile
-2. **Score each plan** against your chosen criteria
+2. **Score each plan** using your chosen criteria on a scale out of 10 using whole numbers. 
 3. **Rank all plans** from best to worst match
 4. **Provide detailed reasoning** for your recommendations
 
@@ -20,7 +20,7 @@ OUTPUT FORMAT:
 [List and explain the criteria you've chosen to evaluate these plans, and why they're important for this business]
 
 ## PLAN ANALYSIS SCORES
-[For each plan, score it against your criteria with explanations]
+[For each plan, score it against your criteria out of 10, with whole numbers, with explanations]
 
 ## FINAL RANKING
 1. **[Top Plan Name] - Overall Score: X/10**
