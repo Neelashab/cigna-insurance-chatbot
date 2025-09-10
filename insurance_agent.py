@@ -589,7 +589,7 @@ if __name__ == "__main__":
     
     # Start the complete workflow
     currentSession = SessionState()
-    print("Hello! I'm here to help you find the best Cigna insurance plan for your business.")
+    print("Hello! I'm here to help you find the best health insurance plan for your business.")
     print("To get started, could you tell me about your business and its insurance needs?")
     
     complete_insurance_workflow(currentSession)

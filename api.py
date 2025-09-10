@@ -35,8 +35,8 @@ from generate_insurance_plans import (
 )
 
 app = FastAPI(
-    title="Cigna Insurance Chatbot API",
-    description="FastAPI service for Cigna insurance chatbot functionality and data processing",
+    title="Health Insurance Chatbot API",
+    description="FastAPI service for health insurance chatbot functionality and data processing",
     version="1.0.0"
 )
 

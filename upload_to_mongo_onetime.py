@@ -56,7 +56,7 @@ def upload_scraped_documents(urls, job_name):
         return None
     
 def main():
-    print("🚀 Starting Cigna Insurance Links Upload Script")
+    print("🚀 Starting Insurance Links Upload Script")
     print("=" * 50)
 
     upload_scraped_documents(plan_links, "upload cleaned documents")

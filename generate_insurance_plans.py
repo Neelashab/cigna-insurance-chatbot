@@ -411,7 +411,7 @@ def process_pages_to_mongodb(cleaned_plans: list[Document]):
 if __name__ == "__main__":
     # scrape all plan info
 
-    print("--- Starting Cigna Plan Processing Script ---")
+    print("--- Starting Plan Processing Script ---")
     print("\n=== PART 1: SCRAPING AND CLEANING DATA (MongoDB) ===")
     clean_data = smart_scraper.scrape_and_store_if_not_exists(plan_links)
 
@@ -443,7 +443,7 @@ if __name__ == "__main__":
     print(f"Successfully uploaded to MongoDB: {uploaded_count}")
     print(f"MongoDB Collection: cigna_insurance.insurance_plans")
 
-    print("\n--- Cigna Data Processing Script Finished ---")
+    print("\n--- Data Processing Script Finished ---")
 
 
 

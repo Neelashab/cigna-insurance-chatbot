@@ -1,7 +1,7 @@
  f""" 
     You are an expert insurance analyst trained to extract information from unstructured group health insurance plan descriptions.
 
-    You will be given a list of documents, each containing detailed information about a specific group insurance plan offered by Cigna. These documents may vary in structure, language, and detail.
+    You will be given a list of documents, each containing detailed information about a specific group health insurance plan. These documents may vary in structure, language, and detail.
     Each document will be separated by a line containing the text "---NEW DOCUMENT---".
 
     Your task involves the following:

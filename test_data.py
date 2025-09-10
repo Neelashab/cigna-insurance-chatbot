@@ -2,7 +2,7 @@
 # SIMULATE CONVERSATIONS FOR
 # EVALS FOR BUILDING BUSINESS PROFILE 
 
-profile_scenario = "The user is a business owner and is looking to buy a group insurance plan from Cigna. The LLM chatbot's job is to conversationally collect information from this user and create a business profile which includes the business' size, the state where it is located, and whether they prefer local or national coverage."
+profile_scenario = "The user is a business owner and is looking to buy a group health insurance plan. The LLM chatbot's job is to conversationally collect information from this user and create a business profile which includes the business' size, the state where it is located, and whether they prefer local or national coverage."
 
 profile_eo = "The chatbot should obtain the user's business' size, the state where it is located, and their preference on local or national coverage for their group insurance plan, in a casual conversation. They should collect one piece of information at a time and not reveal rigid data categories. When information is missing, they should ask for it casually and politely. Once all information is provided by the user, this should be recognized by the LLM and the chatbot should indicate that they are done with collecting information and will now begin plan discovery."
 
