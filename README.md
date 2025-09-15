@@ -17,9 +17,6 @@ I also used GEval from ConfidentAI, previously DeepEval, to implement multi-turn
 The front end repository is also publically visible, and is a simple streamlit application that is powered by the service defined in this repository. 
 
 # Project Stack
-  Backend Framework & API
-  - FastAPI - Modern Python web framework for building RESTful APIs with automatic OpenAPI documentation
-  - Uvicorn - ASGI server for serving the FastAPI application
 
   Language Models & AI
   - OpenAI GPT-4 - Primary reasoning model for plan analysis and chat interactions
@@ -44,8 +41,7 @@ The front end repository is also publically visible, and is a simple streamlit a
   - Pydantic - Data validation and settings management with type hints
   - Dynamic Model Generation - Runtime creation of Pydantic models based on scraped insurance plan fields
 
-  Development & Configuration
-  - Python-dotenv - Environment variable management
-  - CORS Middleware - Cross-origin resource sharing for frontend integration
+  Backend Framework & API
+  - FastAPI - Modern Python web framework for building RESTful APIs with automatic OpenAPI documentation
 
 # Room for Improvement & Next Steps
