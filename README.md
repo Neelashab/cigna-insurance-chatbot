@@ -19,30 +19,22 @@ The front end repository is also publically visible, and is a simple streamlit a
 
 # Project Stack
 
-  Language Models & AI
-  - OpenAI GPT-4 - Primary reasoning model for plan analysis and chat interactions
-  - OpenAI GPT-4o-mini - Lightweight model for query rewriting and plan discovery
-  - Transformers - Hugging Face library with BERT for Named Entity Recognition (NER)
-  - Tiktoken - Token counting and management for conversation history
+Data Processing & Storage
+  - Beautiful Soup 4 -  HTML parsing and web scraping
+  - Pydantic - Data validation
+    **Q&A Bot**
+    - LangChain - Recursive chunking for vector database 
+    - Pinecone - Vector database for semantic search and RAG (Retrieval-Augmented Generation)
+    **Sales Bot**
+    - OpeanAI's GPT 4.1 Reasoning Model - Creates metadata structure and then structures plans accordingly
+    - MongoDB - Document storage for generated, structured insurance plans
 
-  Vector Database & Search
-  - Pinecone - Vector database for semantic search and RAG (Retrieval-Augmented Generation)
-  - BGE-reranker-v2-m3 - AI-powered reranking for improved search relevance
+Conversation Management
+  - OpenAI GPT-4 - Primary chat interactions
+  - OpenAI GPT-4o-mini - Lightweight model for query rewriting and intelligent conversation summaries
+  - Hugging Face library with BERT for Named Entity Recognition (NER) - Aides intelligent conversation summaries
 
-  Database & Storage
-  - MongoDB - Primary database for storing insurance plans, scraped content, and dynamic model definitions
-  - PyMongo - Python driver for MongoDB operations
-
-  Data Processing & Web Scraping
-  - Beautiful Soup 4 - HTML parsing and web scraping
-  - LangChain - Document processing, text splitting, and metadata extraction
-  - Requests - HTTP client for web scraping operations
-
-  Data Validation & Schemas
-  - Pydantic - Data validation and settings management with type hints
-  - Dynamic Model Generation - Runtime creation of Pydantic models based on scraped insurance plan fields
-
-  Backend Framework & API
-  - FastAPI - Modern Python web framework for building RESTful APIs with automatic OpenAPI documentation
+Backend Framework
+  - FastAPI - Framework for RESTful APIs and hosting application
 
 # Room for Improvement & Next Steps
