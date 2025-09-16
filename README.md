@@ -19,22 +19,25 @@ The front end repository is also publically visible, and is a simple streamlit a
 
 # Project Stack
 
-Data Processing & Storage
+### Data Processing & Storage
   - Beautiful Soup 4 -  HTML parsing and web scraping
   - Pydantic - Data validation
+    
     **Q&A Bot**
     - LangChain - Recursive chunking for vector database 
     - Pinecone - Vector database for semantic search and RAG (Retrieval-Augmented Generation)
+      
     **Sales Bot**
     - OpeanAI's GPT 4.1 Reasoning Model - Creates metadata structure and then structures plans accordingly
     - MongoDB - Document storage for generated, structured insurance plans
 
-Conversation Management
+### Conversation Management
   - OpenAI GPT-4 - Primary chat interactions
   - OpenAI GPT-4o-mini - Lightweight model for query rewriting and intelligent conversation summaries
   - Hugging Face library with BERT for Named Entity Recognition (NER) - Aides intelligent conversation summaries
 
-Backend Framework
+### Backend & Testing
   - FastAPI - Framework for RESTful APIs and hosting application
+  - ConfidentAI's GEval - Generates conversational test cases and tests them with user provided metrics.
 
 # Room for Improvement & Next Steps
