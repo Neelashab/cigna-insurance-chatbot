@@ -15,7 +15,7 @@ I avoid latency and exceeding the model's context window by pruning the initial 
 
 I also used GEval from ConfidentAI, previously DeepEval, to implement multi-turn, LLM-as a judge evals.
 
-The front end repository is also publicaly visible, and is a simple streamlit application that is powered by the service defined in this repository. 
+The front end repository is also publicly visible, and is a simple streamlit application that is powered by the service defined in this repository. 
 
 # Project Stack
 
