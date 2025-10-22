@@ -17,10 +17,11 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
 """"
-This file takes unstructured data about insurance plans obstained through web scraping 
+This file retrieves unstructured data about insurance plans from MongoDB
 and dynamically generates metadata with that distinguishes each insurance plan with GenAI assistance.
 
 This metadata is stored as fields along with the original unstructured data in a MongoDB document. 
+This structured document is what is used to service client requests.
 """
 
 
@@ -47,7 +48,6 @@ try:
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
-
 
 
 file_path = Path("insurance_models.py")

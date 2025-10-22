@@ -13,6 +13,16 @@ from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 import urllib.parse
 
+
+"""
+This file stores raw data scraped from the internet in both MongoDB and in Pinecone. 
+General insurance data is chunked and stored as dense vectors in Pinecone to be used later during RAG. 
+Raw, unstructured information about insurance plans will be stored in MongoDB to be retrieved later for further processing. 
+The final, processed plan data is what will be used to serve client side requests. 
+"""
+
+
+
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
