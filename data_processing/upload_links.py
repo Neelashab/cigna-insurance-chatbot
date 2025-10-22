@@ -5,7 +5,11 @@ import json
 # Configuration
 API_BASE_URL = "http://localhost:8000"
 
-# Your links to upload
+
+"""
+Scrape and upload insurance plan data to MongoDB
+"""
+
 links = [
     "https://www.cigna.com/employers/medical-plans/ppo",
     "https://www.cigna.com/employers/medical-plans/hmo",

@@ -1,12 +1,8 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
-from typing import Optional, List, Dict, Any
-from enum import Enum
+from typing import List
 import uvicorn
-import uuid
 from datetime import datetime
-import json
 from pathlib import Path
 
 # Import existing modules
@@ -17,9 +13,27 @@ from controller.insurance_agent import (
     search_eligible_plans,
     reason_about_plans
 )
-from models.schemas import PlanDiscoveryAnswers
+from models.api_models import (
+    ChatRequest,
+    ChatResponse,
+    PlanDiscoveryRequest,
+    PlanDiscoveryResponseModel,
+    PlanAnalysisResponse,
+    ScrapeRequest,
+    ProcessRequest,
+    ScrapeAndProcessRequest,
+    JobStatus
+)
+from controller.session_manager import (
+    sessions,
+    jobs_store,
+    create_session_id,
+    get_session,
+    create_job,
+    update_job_status,
+    get_job_info
+)
 
-# Import data processing modules
 import data_processing.smart_scraper as smart_scraper
 from data_processing.generate_insurance_plans import (
     plan_analysis, 
@@ -48,103 +62,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# In-memory session storage (in production, use Redis or database)
-sessions = {}
-
-# Job status tracking for data processing
-class JobStatus(str, Enum):
-    PENDING = "pending"
-    RUNNING = "running" 
-    COMPLETED = "completed"
-    FAILED = "failed"
-
-class JobInfo(BaseModel):
-    job_id: str
-    job_name: Optional[str] = None
-    status: JobStatus
-    created_at: datetime
-    updated_at: datetime
-    result: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-    progress: Optional[str] = None
-
-# Global job store (in production, use Redis or database)
-jobs_store: Dict[str, JobInfo] = {}
-
-class ChatRequest(BaseModel):
-    message: str
-
-class ChatResponse(BaseModel):
-    response: str
-    session_id: str
-
-class PlanDiscoveryRequest(BaseModel):
-    message: str
-
-class PlanDiscoveryResponseModel(BaseModel):
-    response: str
-    session_id: str
-    plan_discovery_answers: Optional[PlanDiscoveryAnswers] = None
-    is_complete: bool = False
-
-class PlanAnalysisResponse(BaseModel):
-    analysis: str
-    eligible_plans_count: int
-    session_id: str
-
-# Data processing models
-class ScrapeRequest(BaseModel):
-    urls: Optional[List[HttpUrl]] = None  # If None, use default plan_links
-    job_name: Optional[str] = None
-
-class ProcessRequest(BaseModel):
-    job_name: Optional[str] = None
-
-class ScrapeAndProcessRequest(BaseModel):
-    urls: Optional[List[HttpUrl]] = None  # If None, use default plan_links
-    job_name: Optional[str] = None
-
-def create_session_id() -> str:
-    """Create a new session ID"""
-    return str(uuid.uuid4())
-
-def get_session(session_id: str) -> SessionState:
-    """Get existing session or raise error"""
-    if session_id not in sessions:
-        raise HTTPException(status_code=404, detail="Session not found")
-    return sessions[session_id]
-
-# Job utility functions
-def create_job(job_name: Optional[str] = None) -> str:
-    """Create a new job and return job ID"""
-    job_id = str(uuid.uuid4())
-    job_info = JobInfo(
-        job_id=job_id,
-        job_name=job_name,
-        status=JobStatus.PENDING,
-        created_at=datetime.now(),
-        updated_at=datetime.now()
-    )
-    jobs_store[job_id] = job_info
-    return job_id
-
-def update_job_status(job_id: str, status: JobStatus, result: Optional[Dict] = None, 
-                     error: Optional[str] = None, progress: Optional[str] = None):
-    """Update job status"""
-    if job_id in jobs_store:
-        job_info = jobs_store[job_id]
-        job_info.status = status
-        job_info.updated_at = datetime.now()
-        if result:
-            job_info.result = result
-        if error:
-            job_info.error = error
-        if progress:
-            job_info.progress = progress
-
-def get_job_info(job_id: str) -> Optional[JobInfo]:
-    """Get job information"""
-    return jobs_store.get(job_id)
 
 @app.get("/")
 async def root():

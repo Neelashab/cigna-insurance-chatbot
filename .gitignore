@@ -2,3 +2,4 @@
 .env
 requirements_backup.txt
 CLAUDE.md
+.VSCodeCounter/
