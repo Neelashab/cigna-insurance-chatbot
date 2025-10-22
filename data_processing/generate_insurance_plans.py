@@ -1,6 +1,5 @@
-import smart_scraper
+import data_processing.smart_scraper as smart_scraper
 from langchain_core.documents import Document
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_transformers.openai_functions import (
     create_metadata_tagger,
 )
@@ -13,11 +12,18 @@ from pydantic import BaseModel, create_model
 from typing import Literal
 import os
 import json
-import urllib.parse
 from datetime import datetime
-
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+
+""""
+This file takes unstructured data about insurance plans obstained through web scraping 
+and dynamically generates metadata with that distinguishes each insurance plan with GenAI assistance.
+
+This metadata is stored as fields along with the original unstructured data in a MongoDB document. 
+"""
+
+
 
 # Load environment variables
 load_dotenv()
@@ -28,32 +34,20 @@ NAMESPACE = os.getenv("NAMESPACE")
 HTML_CACHE_DIR = Path(os.getenv("HTML_CACHE_DIR"))
 MONGODB_URI= os.getenv("MONGODB_URI")
 
-# ---------------- MONGO SUPPORT ---------------------------
 
-# URL encode the MongoDB URI to handle special characters
-# if MONGODB_URI and "://" in MONGODB_URI:
-#     # Parse the URI to extract and encode credentials
-#     from urllib.parse import quote_plus, urlparse
-#     parsed = urlparse(MONGODB_URI)
-#     if parsed.username and parsed.password:
-#         encoded_username = quote_plus(parsed.username)
-#         encoded_password = quote_plus(parsed.password)
-#         MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
-#                                          f"{encoded_username}:{encoded_password}@")
 
-# Create a new client and connect to the server
 mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 db = mongo_client['cigna_insurance']
 collection = db['insurance_plans']
-models_collection = db['insurance_models']  # New collection for model metadata
+models_collection = db['insurance_models']  
 
-# Send a ping to confirm a successful connection
+
 try:
     mongo_client.admin.command('ping')
     print("Pinged your deployment. You successfully connected to MongoDB!")
 except Exception as e:
     print(e)
-# ----------------- END MONGO SUPPORT --------------------------
+
 
 
 file_path = Path("insurance_models.py")
@@ -96,7 +90,7 @@ class PlanAnalysis(BaseModel):
     required_fields: list[str]
     key_differences: list[list[str]]
 
-# HELPTER FUNCTIONS
+# HELPER FUNCTIONS
 def aggregate_page_contents(documents: list[Document], separator: str = "---NEW DOCUMENT---") -> str:
     """Aggregates the page_content of each LangChain Document into a single string with separators."""
     return separator.join(doc.page_content.strip() for doc in documents)
@@ -129,6 +123,7 @@ def generate_pydantic_models(required_fields: list[str], key_differences: list[l
 def generate_metadata_tagger(Metadata: BaseModel):
     llm = ChatOpenAI(temperature=0, model="gpt-4.1")
     document_transformer = create_metadata_tagger(Metadata, llm)
+
 
 # MAIN FUNCTIONS
 
@@ -280,8 +275,6 @@ def upload_to_mongodb(page_content: str, metadata: dict, page_url: str):
     except Exception as e:
         print(f"  Error uploading to MongoDB: {e}")
         return None
-
-# ==================== MODEL METADATA MONGODB FUNCTIONS ====================
 
 def upload_local_models_to_mongodb():
     """
@@ -447,74 +440,4 @@ if __name__ == "__main__":
 
 
 
-
-# You look through the plan links
-    # ROUND 1 -> tell me what fields are in each plan? what do you feel is relevant to include? 
-                # what are the key things that differentiate each plan and would influence an employeers decision when buying it? 
-
-    # ROUND 2 -> go through the material again and fit it into the fields you identified in the first round. then upload these to pinecone
-
-# create master list of all lists 
-# upload each of the items in the list to pinecone 
-
-
-# fully_insured_plan = """
-
-#     # one for each state, size, industry
-#     state: str
-#     size: Literal["2–99", "100–499", "500–2,999", "3,000+"]
-#     industry: Literal[
-#         "Hospital and Health Systems", "Higher Education", "K-12 Education",
-#         "State and Local Governments", "Taft-Hartley and Federal",
-#         "Third Party Administrators (Payer Solutions)"
-#     ]
-
-#     plan_type: Literal["OAP", "PPO", "EPO", "LP", "SF", "HMO", "MN", "MI"]
-#     pcp_required: bool 
-#     pcp_auto_assign: bool 
-#     refferal_to_specialist: bool
-#     network_type: Literal["National", "Local"]
-#     out_of_network_coverage: bool
-#     urgent_care_coverage: bool
-#     prior_authorization_required: bool
-#     self_funded_options: bool
-#     open_to_HSA: bool
-#     coverage_highlights: str
-#     plan_info: str
-#     """
-
-# Different Plan Types
-# Set rules for how care is accessed 
-# Affects cost structure but within a comparable range
-"""
-OAP -> Open Access Plan (all states and sizes)
-PPO -> preferred provider organization (all states and sizes)
-HMO -> health maintenance organization (all states and sizes)
-EPO -> Exclusive Provider Information -> (all states, all sizes)
-MN -> Medical Network (all states, all sizes)
-MI -> Medical Indemnity (all states, all sizes)
-
-## randomly generate eligble states
-LP -> LocalPLus (some states, all sizes)
-SF -> SureFit (some states, all sizes)
-
-SG -> Small Group -> (TN, GA, AZ, 2-50 employees)
-"""
-
-# Cost Differences Between Plans 
-
-# Tiers within each plan -> these dominate cost
-"""
-Tier -> Bronze, Silver, Gold, Platinum
-Monthly Premium -> Low, Moderate, High. Very High 
-OOP -> Out of Pocket Maximum -> High, Moderate, Low, Very Low
-Copays -> None (pay full cost till deductible), Some, Most Services, Low Copay or None
-Perks -> Few, Limited extras, Wellness/Telehealth, Most perks
-"""
-
-# Industry Specific Info
-"""
-Specific Group Benefits 
-e.g Smart Support Program for specialized customer service for public sector clients
-"""
 

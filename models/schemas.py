@@ -123,3 +123,14 @@ class PlanDiscoveryResponse(BaseModel):
     plan_discovery_answers: PlanDiscoveryAnswers
     response: str
 
+class SmartQueries(BaseModel):
+    clarify: bool
+    queryDB: bool
+    queries: list[str]
+    
+class ChatResponse(BaseModel):
+    response: str
+
+class SummaryResponse(BaseModel):
+    summary: str
+

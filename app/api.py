@@ -10,18 +10,18 @@ import json
 from pathlib import Path
 
 # Import existing modules
-from insurance_agent import (
+from controller.insurance_agent import (
     SessionState, 
     ask_rag_bot, 
     plan_discovery_node,
     search_eligible_plans,
     reason_about_plans
 )
-from schemas import PlanDiscoveryAnswers
+from models.schemas import PlanDiscoveryAnswers
 
 # Import data processing modules
-import smart_scraper
-from generate_insurance_plans import (
+import data_processing.smart_scraper as smart_scraper
+from data_processing.generate_insurance_plans import (
     plan_analysis, 
     process_pages_to_mongodb, 
     generate_pydantic_models,

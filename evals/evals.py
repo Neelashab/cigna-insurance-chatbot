@@ -3,8 +3,8 @@ from deepeval.simulator import ConversationSimulator
 from deepeval.dataset import ConversationalGolden
 from deepeval import evaluate
 from deepeval.metrics import ConversationalGEval
-from test_data import *
-from insurance_agent import plan_discovery_node, SessionState
+from evals.test_data import *
+from controller.insurance_agent import plan_discovery_node, SessionState
 
 
 # PLAN DISCOVERY TESTING PIPELINE

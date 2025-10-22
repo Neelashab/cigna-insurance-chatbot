@@ -12,7 +12,7 @@ import tiktoken
 import uuid
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 
-from schemas import BusinessProfile, PlanDiscoveryResponse, PlanDiscoveryAnswers
+from models.schemas import BusinessProfile, PlanDiscoveryResponse, PlanDiscoveryAnswers, SmartQueries, ChatResponse, SummaryResponse
 
 # Load environment variables
 load_dotenv()
@@ -27,15 +27,6 @@ pc = Pinecone(api_key=PINECONE_API_KEY)
 index = pc.Index(host=PINECONE_INDEX_HOST)
 client = OpenAI(api_key=OPENAI_API_KEY)
 
-# # Setup MongoDB connection
-# if MONGODB_URI and "://" in MONGODB_URI:
-#     from urllib.parse import quote_plus, urlparse
-#     parsed = urlparse(MONGODB_URI)
-#     if parsed.username and parsed.password:
-#         encoded_username = quote_plus(parsed.username)
-#         encoded_password = quote_plus(parsed.password)
-#         MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
-#                                          f"{encoded_username}:{encoded_password}@")
 
 mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 db = mongo_client['cigna_insurance']
@@ -176,16 +167,6 @@ Provide a concise summary that maintains important context for insurance discuss
         if self.count_tokens(self.chat_history) > max_tokens:
             self.manage_token_limit(max_tokens, percent_to_summarize)
 
-class SmartQueries(BaseModel):
-    clarify: bool
-    queryDB: bool
-    queries: list[str]
-    
-class ChatResponse(BaseModel):
-    response: str
-
-class SummaryResponse(BaseModel):
-    summary: str
 
 def rewrite_query(user_query, client, currentSession: SessionState):
     # Get conversation history and entities (excluding current query since it hasn't been added yet)
@@ -550,38 +531,6 @@ def complete_insurance_workflow(currentSession: SessionState):
 
 # Chat loop
 if __name__ == "__main__":
-    # # Test MongoDB search with dummy data
-    # print("=== TESTING MONGODB SEARCH ===")
-    
-    # dummy_answers = PlanDiscoveryAnswers(
-    #     business_size=40,
-    #     location="CA", 
-    #     coverage_preference="National"
-    # )
-    
-    # print("Testing with dummy plan discovery answers:")
-    # print(f"  Business Size: {dummy_answers.business_size} employees")
-    # print(f"  Location: {dummy_answers.location}")
-    # print(f"  Coverage Preference: {dummy_answers.coverage_preference}")
-    
-    # # Test the mapping function
-    # size_categories = map_business_size_to_categories(dummy_answers.business_size)
-    # print(f"  Size categories: {size_categories}")
-    
-    # # Test MongoDB search
-    # test_results = search_eligible_plans(dummy_answers)
-    # print(f"\nTest Results: Found {len(test_results)} matching plans")
-    # for plan_name, raw_text in test_results.items():
-    #     print(f"  Plan: {plan_name} (Text length: {len(raw_text)} characters)")
-    
-    # # Test plan reasoning if we found eligible plans
-    # if test_results:
-    #     print("\n" + "="*50)
-    #     print("Testing plan reasoning and ranking...")
-    #     analysis_result = reason_about_plans(test_results, dummy_answers)
-        
-    # print("\n" + "="*50)
-    # print("All tests complete!")
     
     print("\n" + "="*60)
     print("TESTING COMPLETE WORKFLOW")

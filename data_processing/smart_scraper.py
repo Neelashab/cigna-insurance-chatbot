@@ -22,16 +22,6 @@ NAMESPACE = os.getenv("NAMESPACE")
 HTML_CACHE_DIR = Path(os.getenv("HTML_CACHE_DIR"))
 MONGODB_URI = os.getenv("MONGODB_URI")
 
-# MongoDB setup
-# if MONGODB_URI and "://" in MONGODB_URI:
-#     from urllib.parse import quote_plus, urlparse
-#     parsed = urlparse(MONGODB_URI)
-#     if parsed.username and parsed.password:
-#         encoded_username = quote_plus(parsed.username)
-#         encoded_password = quote_plus(parsed.password)
-#         MONGODB_URI = MONGODB_URI.replace(f"{parsed.username}:{parsed.password}@", 
-#                                          f"{encoded_username}:{encoded_password}@")
-
 mongo_client = MongoClient(MONGODB_URI, server_api=ServerApi('1'))
 db = mongo_client['cigna_insurance']
 scraped_collection = db['scraped_documents']  # New collection for scraped documents
@@ -40,11 +30,6 @@ scraped_collection = db['scraped_documents']  # New collection for scraped docum
 client = OpenAI(api_key=OPENAI_API_KEY)
 SESSION_ID = "development_id"  # For development, use a fixed session ID. In production, generate a new one each time.
 
-
-# SCRAPING NOTES:
-# - LLM does not have the content of the forms, should be instructed to tell customer a certain form is available on their website and what the title is
-# - Medical and dental plan documents are here: https://www.cigna.com/individuals-families/member-guide/plan-documents/
-#   * there are too many permutations for state and year to scrape all of them, instruct LLM accordingly
 
 URLS = ["https://www.cigna.com/individuals-families/shop-plans/health-insurance-plans/",
                 "https://www.cigna.com/individuals-families/member-guide/",
