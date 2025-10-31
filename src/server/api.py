@@ -54,6 +54,9 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# CORS Middleware adds necessary HTTP headers to app response
+# * => allow all origins, will change for production when handling sensitive information
+# allow all methods and non standard HTP headers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
